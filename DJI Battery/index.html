@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>LED Monitor</title>
+<style>
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ── Header ── */
+header {
+  width: 100%;
+  max-width: 600px;
+  padding: 16px;
+  text-align: center;
+}
+header h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: 1px; }
+
+/* ── Permission Status ── */
+#permission-status {
+  width: 100%;
+  max-width: 600px;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  margin: 0 16px 8px;
+  transition: background 0.3s;
+}
+#permission-status.pending { background: #e2a03f22; color: #e2a03f; }
+#permission-status.granted { background: #2ecc7122; color: #2ecc71; }
+#permission-status.denied  { background: #e74c3c22; color: #e74c3c; }
+#perm-retry {
+  margin-left: 12px;
+  padding: 4px 14px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+/* ── Video Container ── */
+#video-container {
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  aspect-ratio: 4/3;
+}
+#camera-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* ── Crop Overlay ── */
+#crop-overlay {
+  position: absolute;
+  border: 2px dashed #00ff88;
+  background: rgba(0, 255, 136, 0.08);
+  cursor: move;
+  touch-action: none;
+  z-index: 10;
+}
+.handle {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  background: #00ff88;
+  border-radius: 3px;
+  opacity: 0.8;
+  touch-action: none;
+}
+.handle.tl { top: -6px; left: -6px; cursor: nwse-resize; }
+.handle.tr { top: -6px; right: -6px; cursor: nesw-resize; }
+.handle.bl { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.handle.br { bottom: -6px; right: -6px; cursor: nwse-resize; }
+
+/* ── LED Count Display ── */
+#led-count {
+  width: 100%;
+  max-width: 600px;
+  text-align: center;
+  font-size: 1.6rem;
+  font-weight: 700;
+  padding: 14px 16px 6px;
+  letter-spacing: 0.5px;
+}
+
+/* ── Alarm Indicator ── */
+#alarm-indicator {
+  width: 100%;
+  max-width: 600px;
+  text-align: center;
+  padding: 12px 16px;
+  background: #e74c3c;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+  border-radius: 6px;
+  margin-top: 6px;
+  animation: flash 0.5s infinite;
+}
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ── Controls ── */
+#controls {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px;
+  justify-content: center;
+}
+.btn {
+  padding: 10px 20px;
+  border: 1px solid #444;
+  background: #2a2a4a;
+  color: #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+.btn:hover { background: #3a3a5a; }
+.btn:active { background: #4a4a6a; }
+
+/* ── Settings Panel ── */
+#settings-panel {
+  width: 100%;
+  max-width: 600px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+  background: #16213e;
+  border-radius: 8px;
+  margin: 0 16px;
+}
+#settings-panel.open { max-height: 700px; }
+#settings-inner { padding: 16px; }
+.setting-row {
+  margin-bottom: 14px;
+}
+.setting-row label {
+  display: block;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+  color: #aaa;
+}
+.setting-row label span { color: #00ff88; font-weight: 600; }
+.setting-row input[type="range"] {
+  width: 100%;
+  accent-color: #00ff88;
+}
+.setting-row input[type="file"] {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+#sound-name {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 2px;
+  display: block;
+}
+.setting-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.setting-actions .btn { font-size: 0.85rem; padding: 8px 16px; }
+.btn-danger { border-color: #e74c3c; color: #e74c3c; }
+.btn-danger:hover { background: #e74c3c33; }
+
+/* ── Utility ── */
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>LED Monitor</h1>
+</header>
+
+<!-- Permission status bar -->
+<div id="permission-status" class="pending">
+  <span id="perm-text">Requesting camera access...</span>
+  <button id="perm-retry" class="hidden" onclick="startCamera()">Retry</button>
+</div>
+
+<!-- Video with crop overlay -->
+<div id="video-container">
+  <video id="camera-feed" autoplay playsinline muted></video>
+  <div id="crop-overlay">
+    <div class="handle tl" data-handle="tl"></div>
+    <div class="handle tr" data-handle="tr"></div>
+    <div class="handle bl" data-handle="bl"></div>
+    <div class="handle br" data-handle="br"></div>
+  </div>
+</div>
+
+<!-- Detection readout -->
+<div id="led-count">Detected: -- LEDs</div>
+
+<!-- Alarm indicator (hidden by default) -->
+<div id="alarm-indicator" class="hidden">ALARM: Target LED count reached!</div>
+
+<!-- Control buttons -->
+<div id="controls">
+  <button class="btn" id="btn-switch" onclick="switchCamera()">Switch Camera</button>
+  <button class="btn" id="btn-settings" onclick="toggleSettings()">Settings</button>
+</div>
+
+<!-- Collapsible settings panel -->
+<div id="settings-panel">
+  <div id="settings-inner">
+    <div class="setting-row">
+      <label>Brightness Threshold: <span id="val-threshold">200</span></label>
+      <input type="range" id="set-threshold" min="50" max="255" value="200">
+    </div>
+    <div class="setting-row">
+      <label>Min Blob Size: <span id="val-minblob">5</span> px</label>
+      <input type="range" id="set-minblob" min="1" max="100" value="5">
+    </div>
+    <div class="setting-row">
+      <label>Max Blob Size: <span id="val-maxblob">500</span> px</label>
+      <input type="range" id="set-maxblob" min="50" max="2000" value="500" step="10">
+    </div>
+    <div class="setting-row">
+      <label>Smoothing Window: <span id="val-smoothing">1.0</span> s</label>
+      <input type="range" id="set-smoothing" min="3" max="50" value="10">
+    </div>
+    <div class="setting-row">
+      <label>Target LED Count: <span id="val-target">3</span></label>
+      <input type="range" id="set-target" min="1" max="10" value="3">
+    </div>
+    <div class="setting-row">
+      <label>Alarm Duration: <span id="val-duration">10</span> s</label>
+      <input type="range" id="set-duration" min="1" max="60" value="10">
+    </div>
+    <div class="setting-row">
+      <label>Custom Alarm Sound:</label>
+      <input type="file" id="set-sound" accept="audio/*">
+      <span id="sound-name">Default (siren)</span>
+    </div>
+    <div class="setting-actions">
+      <button class="btn" onclick="testAlarm()">Test Alarm</button>
+      <button class="btn" onclick="stopAlarm()">Stop Alarm</button>
+      <button class="btn btn-danger" onclick="resetDefaults()">Reset Defaults</button>
+    </div>
+  </div>
+</div>
+
+<!-- Offscreen canvas for image processing -->
+<canvas id="detect-canvas" style="display:none;"></canvas>
+
+<script>
+/* ============================================================
+   LED Monitor — Client-side LED detection from camera feed
+   ============================================================ */
+
+// ── Defaults ──
+const DEFAULTS = {
+  brightnessThreshold: 200,
+  minBlobSize: 5,
+  maxBlobSize: 500,
+  smoothingWindow: 1.0,   // seconds
+  targetLedCount: 3,
+  alarmDuration: 10,       // seconds
+  customAlarmSound: null   // data URL string or null
+};
+
+// ── State ──
+let settings = { ...DEFAULTS };
+let cropRegion = { x: 25, y: 25, w: 50, h: 50 }; // percentages
+let currentStream = null;
+let facingMode = 'environment';
+let detectionInterval = null;
+let rollingCounts = [];  // { time, count }
+let alarmActive = false;
+let alarmTimeout = null;
+let audioCtx = null;
+let alarmSource = null;
+
+// ── DOM References ──
+const videoEl = document.getElementById('camera-feed');
+const canvasEl = document.getElementById('detect-canvas');
+const canvasCtx = canvasEl.getContext('2d', { willReadFrequently: true });
+const permStatus = document.getElementById('permission-status');
+const permText = document.getElementById('perm-text');
+const permRetry = document.getElementById('perm-retry');
+const ledCountEl = document.getElementById('led-count');
+const alarmEl = document.getElementById('alarm-indicator');
+const cropOverlay = document.getElementById('crop-overlay');
+const settingsPanel = document.getElementById('settings-panel');
+
+// ── Settings: Load / Save ──
+function loadSettings() {
+  try {
+    const s = localStorage.getItem('ledmon_settings');
+    if (s) settings = { ...DEFAULTS, ...JSON.parse(s) };
+    const c = localStorage.getItem('ledmon_crop');
+    if (c) cropRegion = JSON.parse(c);
+  } catch (e) { /* use defaults */ }
+}
+
+function saveSettings() {
+  localStorage.setItem('ledmon_settings', JSON.stringify(settings));
+}
+
+function saveCrop() {
+  localStorage.setItem('ledmon_crop', JSON.stringify(cropRegion));
+}
+
+function resetDefaults() {
+  settings = { ...DEFAULTS };
+  cropRegion = { x: 25, y: 25, w: 50, h: 50 };
+  saveSettings();
+  saveCrop();
+  applyCropToDOM();
+  syncUIFromSettings();
+  document.getElementById('sound-name').textContent = 'Default (siren)';
+}
+
+// Sync UI sliders/labels from current settings
+function syncUIFromSettings() {
+  document.getElementById('set-threshold').value = settings.brightnessThreshold;
+  document.getElementById('val-threshold').textContent = settings.brightnessThreshold;
+  document.getElementById('set-minblob').value = settings.minBlobSize;
+  document.getElementById('val-minblob').textContent = settings.minBlobSize;
+  document.getElementById('set-maxblob').value = settings.maxBlobSize;
+  document.getElementById('val-maxblob').textContent = settings.maxBlobSize;
+  document.getElementById('set-smoothing').value = Math.round(settings.smoothingWindow * 10);
+  document.getElementById('val-smoothing').textContent = settings.smoothingWindow.toFixed(1);
+  document.getElementById('set-target').value = settings.targetLedCount;
+  document.getElementById('val-target').textContent = settings.targetLedCount;
+  document.getElementById('set-duration').value = settings.alarmDuration;
+  document.getElementById('val-duration').textContent = settings.alarmDuration;
+}
+
+// ── Settings Panel Wiring ──
+function initSettings() {
+  // Each slider updates its setting, label, and saves
+  const wire = (id, key, display, transform) => {
+    const el = document.getElementById(id);
+    el.addEventListener('input', () => {
+      const raw = Number(el.value);
+      const val = transform ? transform(raw) : raw;
+      settings[key] = val;
+      document.getElementById(display).textContent =
+        typeof val === 'number' && val % 1 !== 0 ? val.toFixed(1) : val;
+      saveSettings();
+    });
+  };
+  wire('set-threshold', 'brightnessThreshold', 'val-threshold');
+  wire('set-minblob', 'minBlobSize', 'val-minblob');
+  wire('set-maxblob', 'maxBlobSize', 'val-maxblob');
+  wire('set-smoothing', 'smoothingWindow', 'val-smoothing', v => v / 10);
+  wire('set-target', 'targetLedCount', 'val-target');
+  wire('set-duration', 'alarmDuration', 'val-duration');
+
+  // Custom alarm sound upload
+  document.getElementById('set-sound').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('Please choose a file under 2 MB.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      settings.customAlarmSound = reader.result;
+      saveSettings();
+      document.getElementById('sound-name').textContent = file.name;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function toggleSettings() {
+  settingsPanel.classList.toggle('open');
+}
+
+// ── Camera Module ──
+async function startCamera() {
+  // Stop any existing stream
+  if (currentStream) {
+    currentStream.getTracks().forEach(t => t.stop());
+    currentStream = null;
+  }
+
+  setPermission('pending', 'Requesting camera access...');
+
+  try {
+    const constraints = {
+      video: { facingMode: facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    };
+    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+    videoEl.srcObject = currentStream;
+    setPermission('granted', 'Camera active');
+
+    // Start detection if not already running
+    if (!detectionInterval) {
+      detectionInterval = setInterval(runDetection, 100);
+    }
+  } catch (err) {
+    if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+      setPermission('denied',
+        'Camera access denied. Please allow camera in your browser settings.');
+    } else if (err.name === 'NotFoundError') {
+      setPermission('denied', 'No camera found on this device.');
+    } else {
+      setPermission('denied', 'Camera error: ' + err.message);
+    }
+  }
+}
+
+function switchCamera() {
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  startCamera();
+}
+
+function setPermission(state, msg) {
+  permStatus.className = state;
+  permText.textContent = msg;
+  if (state === 'denied') {
+    permRetry.classList.remove('hidden');
+  } else {
+    permRetry.classList.add('hidden');
+  }
+}
+
+// ── Detection Algorithm ──
+function runDetection() {
+  if (videoEl.readyState < 2) return; // video not ready
+
+  const vw = videoEl.videoWidth;
+  const vh = videoEl.videoHeight;
+  if (!vw || !vh) return;
+
+  // Compute crop in pixel coordinates
+  const sx = Math.round(cropRegion.x / 100 * vw);
+  const sy = Math.round(cropRegion.y / 100 * vh);
+  const sw = Math.round(cropRegion.w / 100 * vw);
+  const sh = Math.round(cropRegion.h / 100 * vh);
+  if (sw <= 0 || sh <= 0) return;
+
+  // Draw crop region to offscreen canvas
+  canvasEl.width = sw;
+  canvasEl.height = sh;
+  canvasCtx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  // Get pixel data
+  const imageData = canvasCtx.getImageData(0, 0, sw, sh);
+  const data = imageData.data;
+  const total = sw * sh;
+  const threshold = settings.brightnessThreshold;
+
+  // Step 1: Binary brightness mask
+  const mask = new Uint8Array(total);
+  for (let i = 0; i < total; i++) {
+    const off = i * 4;
+    const brightness = (data[off] + data[off + 1] + data[off + 2]) / 3;
+    mask[i] = brightness >= threshold ? 1 : 0;
+  }
+
+  // Step 2: Connected component labeling (iterative flood fill)
+  const labels = new Int32Array(total);
+  let labelCount = 0;
+  const blobSizes = [];
+  const stack = [];
+
+  for (let i = 0; i < total; i++) {
+    if (mask[i] === 1 && labels[i] === 0) {
+      labelCount++;
+      let size = 0;
+      stack.length = 0;
+      stack.push(i);
+      labels[i] = labelCount;
+
+      while (stack.length > 0) {
+        const idx = stack.pop();
+        size++;
+        const px = idx % sw;
+        const py = (idx - px) / sw;
+
+        // 4-connected neighbors
+        if (px > 0      && mask[idx - 1]  === 1 && labels[idx - 1]  === 0) { labels[idx - 1]  = labelCount; stack.push(idx - 1);  }
+        if (px < sw - 1  && mask[idx + 1]  === 1 && labels[idx + 1]  === 0) { labels[idx + 1]  = labelCount; stack.push(idx + 1);  }
+        if (py > 0      && mask[idx - sw] === 1 && labels[idx - sw] === 0) { labels[idx - sw] = labelCount; stack.push(idx - sw); }
+        if (py < sh - 1  && mask[idx + sw] === 1 && labels[idx + sw] === 0) { labels[idx + sw] = labelCount; stack.push(idx + sw); }
+      }
+      blobSizes.push(size);
+    }
+  }
+
+  // Step 3: Filter blobs by size
+  let count = 0;
+  for (let b = 0; b < blobSizes.length; b++) {
+    if (blobSizes[b] >= settings.minBlobSize && blobSizes[b] <= settings.maxBlobSize) {
+      count++;
+    }
+  }
+
+  // Step 4: Rolling window smoothing (median)
+  const now = performance.now();
+  rollingCounts.push({ time: now, count: count });
+  const cutoff = now - settings.smoothingWindow * 1000;
+  while (rollingCounts.length > 0 && rollingCounts[0].time < cutoff) {
+    rollingCounts.shift();
+  }
+
+  const sorted = rollingCounts.map(r => r.count).sort((a, b) => a - b);
+  const smoothed = sorted[Math.floor(sorted.length / 2)];
+
+  // Update display
+  updateLedDisplay(smoothed);
+
+  // Check alarm condition
+  if (smoothed === settings.targetLedCount && !alarmActive) {
+    triggerAlarm();
+  }
+}
+
+function updateLedDisplay(count) {
+  ledCountEl.textContent = 'Detected: ' + count + ' LED' + (count !== 1 ? 's' : '');
+  if (count === settings.targetLedCount) {
+    ledCountEl.style.color = '#e74c3c';
+  } else if (count > 0) {
+    ledCountEl.style.color = '#f1c40f';
+  } else {
+    ledCountEl.style.color = '#e0e0e0';
+  }
+}
+
+// ── Crop Overlay ──
+let dragState = null; // null | 'move' | 'tl' | 'tr' | 'bl' | 'br'
+let dragStart = { x: 0, y: 0 };
+let cropStart = { x: 0, y: 0, w: 0, h: 0 };
+const MIN_CROP = 5; // minimum 5% in each dimension
+
+function applyCropToDOM() {
+  cropOverlay.style.left   = cropRegion.x + '%';
+  cropOverlay.style.top    = cropRegion.y + '%';
+  cropOverlay.style.width  = cropRegion.w + '%';
+  cropOverlay.style.height = cropRegion.h + '%';
+}
+
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
+
+function initCropOverlay() {
+  applyCropToDOM();
+
+  // Body of overlay = move
+  cropOverlay.addEventListener('pointerdown', (e) => {
+    if (e.target.dataset.handle) return; // let handle handler take it
+    e.preventDefault();
+    beginDrag(e, 'move');
+  });
+
+  // Corner handles = resize
+  cropOverlay.querySelectorAll('.handle').forEach(h => {
+    h.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      beginDrag(e, h.dataset.handle);
+    });
+  });
+
+  document.addEventListener('pointermove', onDrag);
+  document.addEventListener('pointerup', endDrag);
+}
+
+function beginDrag(e, type) {
+  dragState = type;
+  const rect = document.getElementById('video-container').getBoundingClientRect();
+  dragStart.x = (e.clientX - rect.left) / rect.width * 100;
+  dragStart.y = (e.clientY - rect.top) / rect.height * 100;
+  cropStart = { ...cropRegion };
+}
+
+function onDrag(e) {
+  if (!dragState) return;
+  const rect = document.getElementById('video-container').getBoundingClientRect();
+  const cx = (e.clientX - rect.left) / rect.width * 100;
+  const cy = (e.clientY - rect.top) / rect.height * 100;
+  const dx = cx - dragStart.x;
+  const dy = cy - dragStart.y;
+
+  if (dragState === 'move') {
+    cropRegion.x = clamp(cropStart.x + dx, 0, 100 - cropStart.w);
+    cropRegion.y = clamp(cropStart.y + dy, 0, 100 - cropStart.h);
+  } else if (dragState === 'br') {
+    cropRegion.w = clamp(cropStart.w + dx, MIN_CROP, 100 - cropStart.x);
+    cropRegion.h = clamp(cropStart.h + dy, MIN_CROP, 100 - cropStart.y);
+  } else if (dragState === 'tl') {
+    const newX = clamp(cropStart.x + dx, 0, cropStart.x + cropStart.w - MIN_CROP);
+    const newY = clamp(cropStart.y + dy, 0, cropStart.y + cropStart.h - MIN_CROP);
+    cropRegion.w = cropStart.w + (cropStart.x - newX);
+    cropRegion.h = cropStart.h + (cropStart.y - newY);
+    cropRegion.x = newX;
+    cropRegion.y = newY;
+  } else if (dragState === 'tr') {
+    const newY = clamp(cropStart.y + dy, 0, cropStart.y + cropStart.h - MIN_CROP);
+    cropRegion.w = clamp(cropStart.w + dx, MIN_CROP, 100 - cropStart.x);
+    cropRegion.h = cropStart.h + (cropStart.y - newY);
+    cropRegion.y = newY;
+  } else if (dragState === 'bl') {
+    const newX = clamp(cropStart.x + dx, 0, cropStart.x + cropStart.w - MIN_CROP);
+    cropRegion.w = cropStart.w + (cropStart.x - newX);
+    cropRegion.h = clamp(cropStart.h + dy, MIN_CROP, 100 - cropStart.y);
+    cropRegion.x = newX;
+  }
+
+  applyCropToDOM();
+}
+
+function endDrag() {
+  if (dragState) {
+    dragState = null;
+    saveCrop();
+  }
+}
+
+// ── Audio / Alarm Module ──
+function ensureAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+}
+
+function triggerAlarm() {
+  alarmActive = true;
+  alarmEl.classList.remove('hidden');
+  ensureAudioCtx();
+
+  if (settings.customAlarmSound) {
+    playCustomSound();
+  } else {
+    playDefaultSiren();
+  }
+
+  // Auto-stop after configured duration
+  if (alarmTimeout) clearTimeout(alarmTimeout);
+  alarmTimeout = setTimeout(stopAlarm, settings.alarmDuration * 1000);
+}
+
+function playDefaultSiren() {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  gain.gain.value = 0.25;
+  osc.type = 'square';
+
+  // Two-tone siren pattern
+  const now = audioCtx.currentTime;
+  const dur = settings.alarmDuration;
+  for (let t = 0; t < dur; t += 0.5) {
+    osc.frequency.setValueAtTime(800, now + t);
+    osc.frequency.setValueAtTime(600, now + t + 0.25);
+  }
+  osc.start(now);
+  osc.stop(now + dur);
+  alarmSource = osc;
+}
+
+function playCustomSound() {
+  fetch(settings.customAlarmSound)
+    .then(r => r.arrayBuffer())
+    .then(buf => audioCtx.decodeAudioData(buf))
+    .then(audioBuffer => {
+      const src = audioCtx.createBufferSource();
+      src.buffer = audioBuffer;
+      src.loop = true;
+      src.connect(audioCtx.destination);
+      src.start();
+      alarmSource = src;
+    })
+    .catch(() => playDefaultSiren());
+}
+
+function stopAlarm() {
+  alarmActive = false;
+  alarmEl.classList.add('hidden');
+  if (alarmSource) {
+    try { alarmSource.stop(); } catch (e) { /* already stopped */ }
+    alarmSource = null;
+  }
+  if (alarmTimeout) {
+    clearTimeout(alarmTimeout);
+    alarmTimeout = null;
+  }
+}
+
+function testAlarm() {
+  // Serves double duty: tests the alarm AND initializes AudioContext via user gesture
+  stopAlarm();
+  triggerAlarm();
+}
+
+// ── Init ──
+document.addEventListener('DOMContentLoaded', () => {
+  loadSettings();
+  syncUIFromSettings();
+  initSettings();
+  initCropOverlay();
+
+  // Update custom sound name if one is saved
+  if (settings.customAlarmSound) {
+    document.getElementById('sound-name').textContent = 'Custom sound loaded';
+  }
+
+  startCamera();
+});
+</script>
+</body>
+</html>

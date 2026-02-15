@@ -233,8 +233,8 @@ header h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: 1px; }
 <div id="settings-panel">
   <div id="settings-inner">
     <div class="setting-row">
-      <label>Brightness Threshold: <span id="val-threshold">200</span></label>
-      <input type="range" id="set-threshold" min="50" max="255" value="200">
+      <label>Brightness Threshold: <span id="val-threshold">60</span></label>
+      <input type="range" id="set-threshold" min="10" max="255" value="60">
     </div>
     <div class="setting-row">
       <label>Video Darkness: <span id="val-darkness">0.30</span></label>
@@ -283,7 +283,7 @@ header h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: 1px; }
 
 // ── Defaults ──
 const DEFAULTS = {
-  brightnessThreshold: 200,
+  brightnessThreshold: 60,
   minBlobSize: 5,
   maxBlobSize: 500,
   smoothingWindow: 1.0,   // seconds

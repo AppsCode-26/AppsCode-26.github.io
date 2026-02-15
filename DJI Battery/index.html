@@ -237,6 +237,10 @@ header h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: 1px; }
       <input type="range" id="set-threshold" min="50" max="255" value="200">
     </div>
     <div class="setting-row">
+      <label>Video Darkness: <span id="val-darkness">0.30</span></label>
+      <input type="range" id="set-darkness" min="5" max="100" value="30">
+    </div>
+    <div class="setting-row">
       <label>Min Blob Size: <span id="val-minblob">5</span> px</label>
       <input type="range" id="set-minblob" min="1" max="100" value="5">
     </div>
@@ -285,7 +289,8 @@ const DEFAULTS = {
   smoothingWindow: 1.0,   // seconds
   targetLedCount: 3,
   alarmDuration: 10,       // seconds
-  customAlarmSound: null   // data URL string or null
+  customAlarmSound: null,  // data URL string or null
+  videoDarkness: 0.3       // multiply pixel brightness by this before thresholding (0.05–1.0)
 };
 
 // ── State ──
@@ -338,12 +343,15 @@ function resetDefaults() {
   applyCropToDOM();
   syncUIFromSettings();
   document.getElementById('sound-name').textContent = 'Default (siren)';
+  applyDarknessFilter();
 }
 
 // Sync UI sliders/labels from current settings
 function syncUIFromSettings() {
   document.getElementById('set-threshold').value = settings.brightnessThreshold;
   document.getElementById('val-threshold').textContent = settings.brightnessThreshold;
+  document.getElementById('set-darkness').value = Math.round(settings.videoDarkness * 100);
+  document.getElementById('val-darkness').textContent = settings.videoDarkness.toFixed(2);
   document.getElementById('set-minblob').value = settings.minBlobSize;
   document.getElementById('val-minblob').textContent = settings.minBlobSize;
   document.getElementById('set-maxblob').value = settings.maxBlobSize;
@@ -354,6 +362,11 @@ function syncUIFromSettings() {
   document.getElementById('val-target').textContent = settings.targetLedCount;
   document.getElementById('set-duration').value = settings.alarmDuration;
   document.getElementById('val-duration').textContent = settings.alarmDuration;
+}
+
+// Apply CSS brightness filter to video so user sees what detection sees
+function applyDarknessFilter() {
+  videoEl.style.filter = 'brightness(' + settings.videoDarkness + ')';
 }
 
 // ── Settings Panel Wiring ──
@@ -368,9 +381,12 @@ function initSettings() {
       document.getElementById(display).textContent =
         typeof val === 'number' && val % 1 !== 0 ? val.toFixed(1) : val;
       saveSettings();
+      // Apply CSS brightness filter when darkness changes
+      if (key === 'videoDarkness') applyDarknessFilter();
     });
   };
   wire('set-threshold', 'brightnessThreshold', 'val-threshold');
+  wire('set-darkness', 'videoDarkness', 'val-darkness', v => v / 100);
   wire('set-minblob', 'minBlobSize', 'val-minblob');
   wire('set-maxblob', 'maxBlobSize', 'val-maxblob');
   wire('set-smoothing', 'smoothingWindow', 'val-smoothing', v => v / 10);
@@ -475,11 +491,12 @@ function runDetection() {
   const total = sw * sh;
   const threshold = settings.brightnessThreshold;
 
-  // Step 1: Binary brightness mask
+  // Step 1: Binary brightness mask (apply darkness multiplier to suppress ambient light)
+  const darkness = settings.videoDarkness;
   const mask = new Uint8Array(total);
   for (let i = 0; i < total; i++) {
     const off = i * 4;
-    const brightness = (data[off] + data[off + 1] + data[off + 2]) / 3;
+    const brightness = ((data[off] + data[off + 1] + data[off + 2]) / 3) * darkness;
     mask[i] = brightness >= threshold ? 1 : 0;
   }
 
@@ -729,6 +746,9 @@ document.addEventListener('DOMContentLoaded', () => {
   syncUIFromSettings();
   initSettings();
   initCropOverlay();
+
+  // Apply darkness filter from saved settings
+  applyDarknessFilter();
 
   // Update custom sound name if one is saved
   if (settings.customAlarmSound) {

@@ -233,24 +233,24 @@ header h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: 1px; }
 <div id="settings-panel">
   <div id="settings-inner">
     <div class="setting-row">
-      <label>Brightness Threshold: <span id="val-threshold">60</span></label>
-      <input type="range" id="set-threshold" min="10" max="255" value="60">
+      <label>Detection Sensitivity: <span id="val-zscore">3.0</span>σ</label>
+      <input type="range" id="set-zscore" min="10" max="60" value="30">
     </div>
     <div class="setting-row">
-      <label>Video Darkness: <span id="val-darkness">0.30</span></label>
-      <input type="range" id="set-darkness" min="5" max="100" value="30">
+      <label>Adapt Speed: <span id="val-adapt">0.03</span></label>
+      <input type="range" id="set-adapt" min="1" max="10" value="3">
     </div>
     <div class="setting-row">
-      <label>Min Blob Size: <span id="val-minblob">5</span> px</label>
-      <input type="range" id="set-minblob" min="1" max="100" value="5">
+      <label>Min Blob Size: <span id="val-minblob">3</span> px</label>
+      <input type="range" id="set-minblob" min="1" max="100" value="3">
     </div>
     <div class="setting-row">
       <label>Max Blob Size: <span id="val-maxblob">500</span> px</label>
       <input type="range" id="set-maxblob" min="50" max="2000" value="500" step="10">
     </div>
     <div class="setting-row">
-      <label>Smoothing Window: <span id="val-smoothing">1.0</span> s</label>
-      <input type="range" id="set-smoothing" min="3" max="50" value="10">
+      <label>Smoothing Window: <span id="val-smoothing">1.5</span> s</label>
+      <input type="range" id="set-smoothing" min="3" max="50" value="15">
     </div>
     <div class="setting-row">
       <label>Target LED Count: <span id="val-target">3</span></label>
@@ -278,19 +278,28 @@ header h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: 1px; }
 
 <script>
 /* ============================================================
-   LED Monitor — Client-side LED detection from camera feed
+   LED Monitor — Z-Score detection for LED lights in camera feed
+   ============================================================
+   Instead of absolute brightness thresholding, this uses a
+   per-pixel exponential moving average (EMA) to track what each
+   pixel "normally" looks like. Pixels that spike significantly
+   above their mean (measured in standard deviations / z-score)
+   are flagged as LED light. This adapts to any lighting and
+   handles fast-blinking LEDs naturally.
    ============================================================ */
 
 // ── Defaults ──
+const SETTINGS_VERSION = 3; // bump to clear old cached settings
+
 const DEFAULTS = {
-  brightnessThreshold: 60,
-  minBlobSize: 5,
-  maxBlobSize: 500,
-  smoothingWindow: 1.0,   // seconds
-  targetLedCount: 3,
-  alarmDuration: 10,       // seconds
-  customAlarmSound: null,  // data URL string or null
-  videoDarkness: 0.3       // multiply pixel brightness by this before thresholding (0.05–1.0)
+  zScoreThreshold: 3.0,  // sigma — how many std devs above mean to flag as LED
+  adaptSpeed: 0.03,       // EMA alpha — lower = slower adaptation, more stable
+  minBlobSize: 3,         // min pixels for a blob to count as an LED
+  maxBlobSize: 500,       // max pixels (filter out large bright areas)
+  smoothingWindow: 1.5,   // seconds — rolling window for LED count smoothing
+  targetLedCount: 3,      // alarm triggers when this many LEDs detected
+  alarmDuration: 10,      // seconds
+  customAlarmSound: null   // data URL string or null
 };
 
 // ── State ──
@@ -304,6 +313,12 @@ let alarmActive = false;
 let alarmTimeout = null;
 let audioCtx = null;
 let alarmSource = null;
+
+// Per-pixel EMA state for z-score detection
+let emaMean = null;        // Float32Array — running mean brightness per pixel
+let emaVar = null;         // Float32Array — running variance per pixel
+let emaInitialized = false;
+let lastCropKey = '';      // tracks crop size changes to reinitialize EMA
 
 // ── DOM References ──
 const videoEl = document.getElementById('camera-feed');
@@ -321,10 +336,18 @@ const settingsPanel = document.getElementById('settings-panel');
 function loadSettings() {
   try {
     const s = localStorage.getItem('ledmon_settings');
-    if (s) settings = { ...DEFAULTS, ...JSON.parse(s) };
+    if (s) {
+      const parsed = JSON.parse(s);
+      if (parsed._version === SETTINGS_VERSION) {
+        settings = { ...DEFAULTS, ...parsed };
+      } else {
+        localStorage.removeItem('ledmon_settings');
+      }
+    }
     const c = localStorage.getItem('ledmon_crop');
     if (c) cropRegion = JSON.parse(c);
   } catch (e) { /* use defaults */ }
+  settings._version = SETTINGS_VERSION;
 }
 
 function saveSettings() {
@@ -337,21 +360,23 @@ function saveCrop() {
 
 function resetDefaults() {
   settings = { ...DEFAULTS };
+  settings._version = SETTINGS_VERSION;
   cropRegion = { x: 25, y: 25, w: 50, h: 50 };
   saveSettings();
   saveCrop();
   applyCropToDOM();
   syncUIFromSettings();
   document.getElementById('sound-name').textContent = 'Default (siren)';
-  applyDarknessFilter();
+  // Reset EMA so it re-learns the baseline
+  emaInitialized = false;
 }
 
 // Sync UI sliders/labels from current settings
 function syncUIFromSettings() {
-  document.getElementById('set-threshold').value = settings.brightnessThreshold;
-  document.getElementById('val-threshold').textContent = settings.brightnessThreshold;
-  document.getElementById('set-darkness').value = Math.round(settings.videoDarkness * 100);
-  document.getElementById('val-darkness').textContent = settings.videoDarkness.toFixed(2);
+  document.getElementById('set-zscore').value = Math.round(settings.zScoreThreshold * 10);
+  document.getElementById('val-zscore').textContent = settings.zScoreThreshold.toFixed(1);
+  document.getElementById('set-adapt').value = Math.round(settings.adaptSpeed * 100);
+  document.getElementById('val-adapt').textContent = settings.adaptSpeed.toFixed(2);
   document.getElementById('set-minblob').value = settings.minBlobSize;
   document.getElementById('val-minblob').textContent = settings.minBlobSize;
   document.getElementById('set-maxblob').value = settings.maxBlobSize;
@@ -364,14 +389,8 @@ function syncUIFromSettings() {
   document.getElementById('val-duration').textContent = settings.alarmDuration;
 }
 
-// Apply CSS brightness filter to video so user sees what detection sees
-function applyDarknessFilter() {
-  videoEl.style.filter = 'brightness(' + settings.videoDarkness + ')';
-}
-
 // ── Settings Panel Wiring ──
 function initSettings() {
-  // Each slider updates its setting, label, and saves
   const wire = (id, key, display, transform) => {
     const el = document.getElementById(id);
     el.addEventListener('input', () => {
@@ -379,14 +398,12 @@ function initSettings() {
       const val = transform ? transform(raw) : raw;
       settings[key] = val;
       document.getElementById(display).textContent =
-        typeof val === 'number' && val % 1 !== 0 ? val.toFixed(1) : val;
+        typeof val === 'number' && val % 1 !== 0 ? val.toFixed(val < 1 ? 2 : 1) : val;
       saveSettings();
-      // Apply CSS brightness filter when darkness changes
-      if (key === 'videoDarkness') applyDarknessFilter();
     });
   };
-  wire('set-threshold', 'brightnessThreshold', 'val-threshold');
-  wire('set-darkness', 'videoDarkness', 'val-darkness', v => v / 100);
+  wire('set-zscore', 'zScoreThreshold', 'val-zscore', v => v / 10);
+  wire('set-adapt', 'adaptSpeed', 'val-adapt', v => v / 100);
   wire('set-minblob', 'minBlobSize', 'val-minblob');
   wire('set-maxblob', 'maxBlobSize', 'val-maxblob');
   wire('set-smoothing', 'smoothingWindow', 'val-smoothing', v => v / 10);
@@ -417,7 +434,6 @@ function toggleSettings() {
 
 // ── Camera Module ──
 async function startCamera() {
-  // Stop any existing stream
   if (currentStream) {
     currentStream.getTracks().forEach(t => t.stop());
     currentStream = null;
@@ -434,7 +450,6 @@ async function startCamera() {
     videoEl.srcObject = currentStream;
     setPermission('granted', 'Camera active');
 
-    // Start detection if not already running
     if (!detectionInterval) {
       detectionInterval = setInterval(runDetection, 100);
     }
@@ -452,6 +467,7 @@ async function startCamera() {
 
 function switchCamera() {
   facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  emaInitialized = false; // reset baseline for new camera
   startCamera();
 }
 
@@ -465,15 +481,15 @@ function setPermission(state, msg) {
   }
 }
 
-// ── Detection Algorithm ──
+// ── Detection Algorithm (Z-Score with EMA) ──
 function runDetection() {
-  if (videoEl.readyState < 2) return; // video not ready
+  if (videoEl.readyState < 2) return;
 
   const vw = videoEl.videoWidth;
   const vh = videoEl.videoHeight;
   if (!vw || !vh) return;
 
-  // Compute crop in pixel coordinates
+  // Compute crop region in pixel coordinates
   const sx = Math.round(cropRegion.x / 100 * vw);
   const sy = Math.round(cropRegion.y / 100 * vh);
   const sw = Math.round(cropRegion.w / 100 * vw);
@@ -485,22 +501,54 @@ function runDetection() {
   canvasEl.height = sh;
   canvasCtx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, sw, sh);
 
-  // Get pixel data
   const imageData = canvasCtx.getImageData(0, 0, sw, sh);
   const data = imageData.data;
   const total = sw * sh;
-  const threshold = settings.brightnessThreshold;
 
-  // Step 1: Binary brightness mask (apply darkness multiplier to suppress ambient light)
-  const darkness = settings.videoDarkness;
-  const mask = new Uint8Array(total);
+  // Compute grayscale brightness for each pixel
+  const brightness = new Float32Array(total);
   for (let i = 0; i < total; i++) {
     const off = i * 4;
-    const brightness = ((data[off] + data[off + 1] + data[off + 2]) / 3) * darkness;
-    mask[i] = brightness >= threshold ? 1 : 0;
+    brightness[i] = (data[off] + data[off + 1] + data[off + 2]) / 3;
   }
 
-  // Step 2: Connected component labeling (iterative flood fill)
+  // Check if crop region size changed — reinitialize EMA if so
+  const cropKey = sw + 'x' + sh;
+  if (cropKey !== lastCropKey || !emaInitialized) {
+    emaMean = new Float32Array(total);
+    emaVar = new Float32Array(total);
+    for (let i = 0; i < total; i++) {
+      emaMean[i] = brightness[i];
+      emaVar[i] = 1.0; // small initial variance to avoid div-by-zero
+    }
+    lastCropKey = cropKey;
+    emaInitialized = true;
+    return; // skip first frame — need baseline before detecting
+  }
+
+  // Z-score detection: flag pixels that are significantly brighter than their running average
+  const alpha = settings.adaptSpeed;
+  const zThresh = settings.zScoreThreshold;
+  const mask = new Uint8Array(total);
+
+  for (let i = 0; i < total; i++) {
+    const val = brightness[i];
+    const mean = emaMean[i];
+    const variance = emaVar[i];
+    const stddev = Math.sqrt(variance);
+
+    // Z-score: how many std devs above the running mean
+    // Guard: if stddev is very small (flat area), require a minimum absolute difference too
+    const z = stddev > 0.5 ? (val - mean) / stddev : 0;
+    mask[i] = z > zThresh ? 1 : 0;
+
+    // Update EMA for next frame (always update — bright pixels included)
+    const diff = val - mean;
+    emaMean[i] = mean + alpha * diff;
+    emaVar[i] = variance + alpha * (diff * diff - variance);
+  }
+
+  // Connected component labeling (iterative flood fill — same as before)
   const labels = new Int32Array(total);
   let labelCount = 0;
   const blobSizes = [];
@@ -520,17 +568,16 @@ function runDetection() {
         const px = idx % sw;
         const py = (idx - px) / sw;
 
-        // 4-connected neighbors
         if (px > 0      && mask[idx - 1]  === 1 && labels[idx - 1]  === 0) { labels[idx - 1]  = labelCount; stack.push(idx - 1);  }
-        if (px < sw - 1  && mask[idx + 1]  === 1 && labels[idx + 1]  === 0) { labels[idx + 1]  = labelCount; stack.push(idx + 1);  }
+        if (px < sw - 1 && mask[idx + 1]  === 1 && labels[idx + 1]  === 0) { labels[idx + 1]  = labelCount; stack.push(idx + 1);  }
         if (py > 0      && mask[idx - sw] === 1 && labels[idx - sw] === 0) { labels[idx - sw] = labelCount; stack.push(idx - sw); }
-        if (py < sh - 1  && mask[idx + sw] === 1 && labels[idx + sw] === 0) { labels[idx + sw] = labelCount; stack.push(idx + sw); }
+        if (py < sh - 1 && mask[idx + sw] === 1 && labels[idx + sw] === 0) { labels[idx + sw] = labelCount; stack.push(idx + sw); }
       }
       blobSizes.push(size);
     }
   }
 
-  // Step 3: Filter blobs by size
+  // Filter blobs by size
   let count = 0;
   for (let b = 0; b < blobSizes.length; b++) {
     if (blobSizes[b] >= settings.minBlobSize && blobSizes[b] <= settings.maxBlobSize) {
@@ -538,21 +585,17 @@ function runDetection() {
     }
   }
 
-  // Step 4: Rolling window smoothing (median)
+  // Rolling window smoothing (max — handles blinking LEDs)
   const now = performance.now();
   rollingCounts.push({ time: now, count: count });
   const cutoff = now - settings.smoothingWindow * 1000;
   while (rollingCounts.length > 0 && rollingCounts[0].time < cutoff) {
     rollingCounts.shift();
   }
+  const smoothed = Math.max(...rollingCounts.map(r => r.count));
 
-  const sorted = rollingCounts.map(r => r.count).sort((a, b) => a - b);
-  const smoothed = sorted[Math.floor(sorted.length / 2)];
-
-  // Update display
   updateLedDisplay(smoothed);
 
-  // Check alarm condition
   if (smoothed === settings.targetLedCount && !alarmActive) {
     triggerAlarm();
   }
@@ -570,10 +613,10 @@ function updateLedDisplay(count) {
 }
 
 // ── Crop Overlay ──
-let dragState = null; // null | 'move' | 'tl' | 'tr' | 'bl' | 'br'
+let dragState = null;
 let dragStart = { x: 0, y: 0 };
 let cropStart = { x: 0, y: 0, w: 0, h: 0 };
-const MIN_CROP = 5; // minimum 5% in each dimension
+const MIN_CROP = 5;
 
 function applyCropToDOM() {
   cropOverlay.style.left   = cropRegion.x + '%';
@@ -589,14 +632,12 @@ function clamp(val, min, max) {
 function initCropOverlay() {
   applyCropToDOM();
 
-  // Body of overlay = move
   cropOverlay.addEventListener('pointerdown', (e) => {
-    if (e.target.dataset.handle) return; // let handle handler take it
+    if (e.target.dataset.handle) return;
     e.preventDefault();
     beginDrag(e, 'move');
   });
 
-  // Corner handles = resize
   cropOverlay.querySelectorAll('.handle').forEach(h => {
     h.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -657,6 +698,7 @@ function endDrag() {
   if (dragState) {
     dragState = null;
     saveCrop();
+    emaInitialized = false; // re-learn baseline after crop change
   }
 }
 
@@ -681,7 +723,6 @@ function triggerAlarm() {
     playDefaultSiren();
   }
 
-  // Auto-stop after configured duration
   if (alarmTimeout) clearTimeout(alarmTimeout);
   alarmTimeout = setTimeout(stopAlarm, settings.alarmDuration * 1000);
 }
@@ -694,7 +735,6 @@ function playDefaultSiren() {
   gain.gain.value = 0.25;
   osc.type = 'square';
 
-  // Two-tone siren pattern
   const now = audioCtx.currentTime;
   const dur = settings.alarmDuration;
   for (let t = 0; t < dur; t += 0.5) {
@@ -735,7 +775,6 @@ function stopAlarm() {
 }
 
 function testAlarm() {
-  // Serves double duty: tests the alarm AND initializes AudioContext via user gesture
   stopAlarm();
   triggerAlarm();
 }
@@ -747,10 +786,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initSettings();
   initCropOverlay();
 
-  // Apply darkness filter from saved settings
-  applyDarknessFilter();
-
-  // Update custom sound name if one is saved
   if (settings.customAlarmSound) {
     document.getElementById('sound-name').textContent = 'Custom sound loaded';
   }

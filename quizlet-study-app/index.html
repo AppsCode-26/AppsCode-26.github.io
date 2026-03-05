@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Study App – Computer Science Fundamentals</title>
+  <style>
+    /* ── DESIGN TOKENS ──────────────────────────────────────────────── */
+    :root {
+      --primary:        #4255FF;
+      --primary-dark:   #3344DD;
+      --primary-light:  #EEF0FF;
+      --white:          #FFFFFF;
+      --gray-50:        #F8F9FA;
+      --gray-100:       #F0F2F5;
+      --gray-200:       #E4E7EB;
+      --gray-400:       #9AA2B0;
+      --gray-600:       #586380;
+      --gray-800:       #2E3856;
+      --gray-900:       #1A2644;
+      --success:        #23AA6E;
+      --success-light:  #E8F8F1;
+      --danger:         #FF4B4B;
+      --danger-light:   #FFF0F0;
+      --warning:        #FF9F1C;
+      --warning-light:  #FFF8EE;
+      --shadow-sm:      0 1px 4px rgba(0,0,0,.08);
+      --shadow-md:      0 4px 16px rgba(0,0,0,.10);
+      --shadow-lg:      0 8px 32px rgba(0,0,0,.14);
+      --radius-sm:      6px;
+      --radius-md:      12px;
+      --radius-lg:      20px;
+      --sidebar-width:  240px;
+      --tr:             0.2s ease;
+    }
+
+    /* ── RESET & BASE ───────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--gray-100);
+      color: var(--gray-800);
+      min-height: 100vh;
+    }
+
+    button { font-family: inherit; cursor: pointer; }
+    input, textarea { font-family: inherit; }
+    a { text-decoration: none; }
+
+    /* ── LAYOUT ─────────────────────────────────────────────────────── */
+    .app-container {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* ── SIDEBAR ────────────────────────────────────────────────────── */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--white);
+      border-right: 1px solid var(--gray-200);
+      display: flex;
+      flex-direction: column;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    .sidebar-brand {
+      padding: 20px 20px 12px;
+      border-bottom: 1px solid var(--gray-200);
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--primary);
+      margin-bottom: 16px;
+    }
+
+    .brand-logo svg { flex-shrink: 0; }
+
+    .set-title {
+      font-size: 0.88rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      line-height: 1.35;
+      margin-bottom: 8px;
+    }
+
+    .term-count-badge {
+      display: inline-block;
+      background: var(--primary-light);
+      color: var(--primary);
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 99px;
+      letter-spacing: 0.3px;
+    }
+
+    .sidebar-nav {
+      padding: 12px 10px;
+      flex: 1;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      color: var(--gray-600);
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: background var(--tr), color var(--tr);
+      margin-bottom: 2px;
+    }
+
+    .nav-item:hover { background: var(--gray-100); color: var(--gray-900); }
+
+    .nav-item.active {
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-icon svg { width: 16px; height: 16px; }
+
+    .sidebar-stats {
+      padding: 14px 20px;
+      border-top: 1px solid var(--gray-200);
+      font-size: 0.78rem;
+    }
+
+    .stats-label {
+      font-weight: 700;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      font-size: 0.68rem;
+      margin-bottom: 8px;
+    }
+
+    .stat-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+
+    .stat-num { font-weight: 700; font-size: 0.9rem; }
+    .stat-num.known   { color: var(--success); }
+    .stat-num.learning { color: var(--warning); }
+    .stat-lbl { color: var(--gray-400); }
+
+    /* ── CONTENT AREA ───────────────────────────────────────────────── */
+    .content-area {
+      flex: 1;
+      min-width: 0;
+      padding: 36px 48px;
+      max-width: 820px;
+    }
+
+    /* ── VIEWS ──────────────────────────────────────────────────────── */
+    .view { display: none; }
+    .view.active {
+      display: block;
+      animation: fadeIn 0.22s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0);   }
+    }
+
+    /* ── VIEW HEADER ────────────────────────────────────────────────── */
+    .view-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+
+    .view-header h2 {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--gray-900);
+    }
+
+    .header-meta {
+      font-size: 0.9rem;
+      color: var(--gray-400);
+      font-weight: 500;
+    }
+
+    /* ── PROGRESS DISPLAY ───────────────────────────────────────────── */
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      max-width: 680px;
+      margin: 0 auto 10px;
+    }
+
+    .progress-label {
+      font-size: 0.82rem;
+      color: var(--gray-400);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .progress-bar-wrap {
+      flex: 1;
+      background: var(--gray-200);
+      height: 4px;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 2px;
+      transition: width 0.35s ease;
+    }
+
+    /* ── FLASHCARD ──────────────────────────────────────────────────── */
+    .card-container {
+      max-width: 680px;
+      margin: 0 auto 20px;
+      perspective: 1200px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .card {
+      width: 100%;
+      height: 320px;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.6s cubic-bezier(0.4, 0.2, 0.2, 1);
+    }
+
+    .card.flipped { transform: rotateY(180deg); }
+
+    .card-face {
+      position: absolute;
+      inset: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px;
+      text-align: center;
+    }
+
+    .card-face.card-back {
+      transform: rotateY(180deg);
+      background: var(--primary);
+    }
+
+    .card-face-label {
+      position: absolute;
+      top: 20px;
+      left: 24px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .card-face.card-back .card-face-label { color: rgba(255,255,255,0.6); }
+
+    .card-text {
+      font-size: 1.55rem;
+      font-weight: 700;
+      color: var(--gray-900);
+      line-height: 1.4;
+    }
+
+    .card-face.card-back .card-text { color: var(--white); font-size: 1.2rem; font-weight: 500; }
+
+    .card-hint {
+      position: absolute;
+      bottom: 18px;
+      font-size: 0.75rem;
+      color: var(--gray-400);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .card-face.card-back .card-hint { color: rgba(255,255,255,0.5); }
+
+    /* ── FLASHCARD NAVIGATION ───────────────────────────────────────── */
+    .fc-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      max-width: 680px;
+      margin: 0 auto 16px;
+      gap: 12px;
+    }
+
+    .btn-nav {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2px solid var(--gray-200);
+      background: var(--white);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color var(--tr), background var(--tr), box-shadow var(--tr);
+      flex-shrink: 0;
+    }
+
+    .btn-nav:hover:not(:disabled) {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .btn-nav:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    .btn-nav svg { width: 18px; height: 18px; stroke: var(--gray-600); }
+    .btn-nav:hover:not(:disabled) svg { stroke: var(--primary); }
+
+    .btn-shuffle {
+      border: none;
+      background: transparent;
+      color: var(--gray-400);
+      font-size: 0.8rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 12px;
+      border-radius: var(--radius-sm);
+      transition: color var(--tr), background var(--tr);
+    }
+
+    .btn-shuffle:hover { color: var(--primary); background: var(--primary-light); }
+
+    .btn-shuffle svg { width: 14px; height: 14px; }
+
+    /* ── FLASHCARD ACTION BUTTONS ───────────────────────────────────── */
+    .fc-actions {
+      display: flex;
+      gap: 12px;
+      max-width: 680px;
+      margin: 0 auto;
+      justify-content: center;
+    }
+
+    .btn-action {
+      padding: 12px 28px;
+      border-radius: var(--radius-md);
+      border: 2px solid;
+      font-weight: 700;
+      font-size: 0.88rem;
+      transition: background var(--tr), transform 0.1s;
+      flex: 1;
+      max-width: 220px;
+    }
+
+    .btn-action:active { transform: scale(0.97); }
+
+    .btn-learning {
+      border-color: var(--warning);
+      color: var(--warning);
+      background: transparent;
+    }
+    .btn-learning:hover { background: var(--warning-light); }
+
+    .btn-know {
+      border-color: var(--success);
+      color: var(--success);
+      background: transparent;
+    }
+    .btn-know:hover { background: var(--success-light); }
+
+    /* ── SHARED BUTTONS ─────────────────────────────────────────────── */
+    .btn-primary {
+      display: inline-block;
+      background: var(--primary);
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius-sm);
+      padding: 12px 28px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      transition: background var(--tr), transform 0.1s;
+    }
+
+    .btn-primary:hover  { background: var(--primary-dark); }
+    .btn-primary:active { transform: scale(0.97); }
+
+    .btn-secondary {
+      display: inline-block;
+      background: transparent;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+      border-radius: var(--radius-sm);
+      padding: 10px 24px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      transition: background var(--tr);
+    }
+
+    .btn-secondary:hover { background: var(--primary-light); }
+
+    /* ── LEARN MODE ─────────────────────────────────────────────────── */
+    .learn-prompt {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 12px;
+    }
+
+    .learn-definition {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: var(--gray-900);
+      background: var(--white);
+      border-radius: var(--radius-md);
+      padding: 28px 32px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+      line-height: 1.55;
+      border: 1px solid var(--gray-200);
+    }
+
+    .learn-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .option-btn {
+      padding: 16px 18px;
+      border-radius: var(--radius-md);
+      border: 2px solid var(--gray-200);
+      background: var(--white);
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--gray-800);
+      text-align: left;
+      transition: border-color var(--tr), background var(--tr), transform 0.1s;
+      line-height: 1.4;
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+    }
+
+    .option-btn:hover:not(:disabled) {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+    }
+
+    .option-btn:active:not(:disabled) { transform: scale(0.98); }
+
+    .option-btn.correct {
+      border-color: var(--success) !important;
+      background: var(--success-light) !important;
+      color: var(--success) !important;
+      font-weight: 700;
+    }
+
+    .option-btn.wrong {
+      border-color: var(--danger) !important;
+      background: var(--danger-light) !important;
+      color: var(--danger) !important;
+    }
+
+    .option-btn:disabled { cursor: not-allowed; }
+
+    .learn-feedback {
+      font-size: 0.9rem;
+      font-weight: 600;
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      margin-bottom: 16px;
+    }
+
+    .learn-feedback.correct-msg { background: var(--success-light); color: var(--success); }
+    .learn-feedback.wrong-msg   { background: var(--danger-light);  color: var(--danger);  }
+
+    /* ── LEARN COMPLETE ─────────────────────────────────────────────── */
+    .complete-card {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: 48px 40px;
+      text-align: center;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--gray-200);
+    }
+
+    .complete-icon {
+      font-size: 3rem;
+      margin-bottom: 12px;
+    }
+
+    .complete-card h3 {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--gray-900);
+      margin-bottom: 8px;
+    }
+
+    .complete-card p {
+      font-size: 1rem;
+      color: var(--gray-400);
+      margin-bottom: 28px;
+    }
+
+    .complete-score {
+      font-size: 2.5rem;
+      font-weight: 900;
+      color: var(--primary);
+      margin-bottom: 6px;
+    }
+
+    /* ── TEST MODE ──────────────────────────────────────────────────── */
+    .test-term-card {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--gray-900);
+      background: var(--white);
+      border-radius: var(--radius-md);
+      padding: 28px 32px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 20px;
+      text-align: center;
+      border: 1px solid var(--gray-200);
+    }
+
+    .test-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      margin-bottom: 10px;
+    }
+
+    .test-textarea {
+      width: 100%;
+      min-height: 100px;
+      border: 2px solid var(--gray-200);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      font-size: 0.95rem;
+      resize: vertical;
+      outline: none;
+      transition: border-color var(--tr);
+      margin-bottom: 12px;
+      line-height: 1.5;
+      color: var(--gray-900);
+    }
+
+    .test-textarea:focus { border-color: var(--primary); }
+
+    .test-feedback {
+      padding: 14px 16px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      margin-bottom: 12px;
+    }
+
+    .test-feedback.correct-msg { background: var(--success-light); color: var(--success); }
+    .test-feedback.wrong-msg   { background: var(--danger-light);  color: var(--danger);  }
+
+    .test-btn-row { display: flex; gap: 10px; align-items: center; }
+
+    /* ── MATCH MODE ─────────────────────────────────────────────────── */
+    .match-meta {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .match-stat {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--gray-400);
+    }
+
+    .match-stat span {
+      color: var(--primary);
+      font-weight: 800;
+    }
+
+    .match-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 4px;
+    }
+
+    .match-card {
+      background: var(--white);
+      border: 2px solid var(--gray-200);
+      border-radius: var(--radius-md);
+      padding: 16px 12px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 500;
+      min-height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: border-color var(--tr), background var(--tr), transform 0.15s, box-shadow var(--tr);
+      color: var(--gray-800);
+      line-height: 1.35;
+    }
+
+    .match-card:hover:not(.matched):not(.selected) {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md);
+    }
+
+    .match-card.selected {
+      border-color: var(--primary);
+      background: var(--primary-light);
+      color: var(--primary);
+      font-weight: 700;
+    }
+
+    .match-card.matched {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.88);
+      transition: opacity 0.4s ease, transform 0.4s ease;
+    }
+
+    .match-card.wrong-flash {
+      border-color: var(--danger) !important;
+      background: var(--danger-light) !important;
+      color: var(--danger) !important;
+      animation: wrongShake 0.4s ease;
+    }
+
+    @keyframes wrongShake {
+      0%,100% { transform: translateX(0); }
+      20%      { transform: translateX(-6px); }
+      40%      { transform: translateX(6px); }
+      60%      { transform: translateX(-4px); }
+      80%      { transform: translateX(4px); }
+    }
+
+    .match-complete {
+      background: var(--white);
+      border-radius: var(--radius-lg);
+      padding: 48px 40px;
+      text-align: center;
+      box-shadow: var(--shadow-md);
+      border: 1px solid var(--gray-200);
+      margin-top: 24px;
+    }
+
+    /* ── LIST VIEW ──────────────────────────────────────────────────── */
+    .list-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .search-input {
+      border: 2px solid var(--gray-200);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color var(--tr);
+      width: 260px;
+      color: var(--gray-800);
+    }
+
+    .search-input:focus { border-color: var(--primary); }
+
+    .term-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .term-row {
+      background: var(--white);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      display: flex;
+      gap: 0;
+      align-items: flex-start;
+      box-shadow: var(--shadow-sm);
+      border: 1px solid var(--gray-200);
+      transition: box-shadow var(--tr);
+    }
+
+    .term-row:hover { box-shadow: var(--shadow-md); }
+    .term-row:nth-child(even) { background: var(--gray-50); }
+
+    .term-col {
+      flex: 1;
+      font-weight: 700;
+      color: var(--gray-900);
+      font-size: 0.92rem;
+      padding-right: 20px;
+    }
+
+    .term-divider {
+      width: 1px;
+      background: var(--gray-200);
+      align-self: stretch;
+      flex-shrink: 0;
+    }
+
+    .def-col {
+      flex: 2;
+      color: var(--gray-600);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      padding-left: 20px;
+    }
+
+    .no-results {
+      text-align: center;
+      color: var(--gray-400);
+      padding: 48px;
+      font-size: 0.9rem;
+    }
+
+    /* ── RESPONSIVE ─────────────────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar { width: 200px; }
+      .content-area { padding: 20px 18px; }
+      .match-grid { grid-template-columns: repeat(3, 1fr); }
+      .learn-options { grid-template-columns: 1fr; }
+      .card-text { font-size: 1.2rem; }
+      .card-face.card-back .card-text { font-size: 1rem; }
+    }
+
+    @media (max-width: 560px) {
+      .app-container { flex-direction: column; }
+      .sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: none;
+        border-bottom: 1px solid var(--gray-200);
+      }
+      .sidebar-brand { padding: 14px 16px 10px; }
+      .sidebar-nav {
+        flex-direction: row;
+        display: flex;
+        gap: 4px;
+        padding: 8px 10px;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .sidebar-nav::-webkit-scrollbar { display: none; }
+      .nav-item { flex-direction: column; gap: 3px; font-size: 0.7rem; padding: 8px 10px; white-space: nowrap; flex-shrink: 0; }
+      .nav-icon { width: auto; height: auto; }
+      .sidebar-stats { display: none; }
+      .match-grid { grid-template-columns: repeat(2, 1fr); }
+      .fc-actions { flex-direction: column; }
+      .btn-action { max-width: 100%; }
+      .content-area { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app-container">
+
+  <!-- ══ SIDEBAR ══════════════════════════════════════════════════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-logo">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="3" width="20" height="14" rx="3" fill="currentColor" opacity="0.15"/>
+          <rect x="2" y="3" width="20" height="14" rx="3" stroke="currentColor" stroke-width="2"/>
+          <path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        StudyCards
+      </div>
+      <div class="set-title" id="sidebar-title">Computer Science Fundamentals</div>
+      <div class="term-count-badge" id="sidebar-count">10 terms</div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a class="nav-item active" data-mode="flashcards" href="#">
+        <span class="nav-icon">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="1" y="3" width="14" height="10" rx="2"/>
+            <path d="M5 8h6M8 5v6"/>
+          </svg>
+        </span>
+        Flashcards
+      </a>
+      <a class="nav-item" data-mode="learn" href="#">
+        <span class="nav-icon">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="8" cy="8" r="6"/>
+            <path d="M8 5v3l2 2"/>
+          </svg>
+        </span>
+        Learn
+      </a>
+      <a class="nav-item" data-mode="test" href="#">
+        <span class="nav-icon">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M3 4h10M3 8h6M3 12h4"/>
+          </svg>
+        </span>
+        Test
+      </a>
+      <a class="nav-item" data-mode="match" href="#">
+        <span class="nav-icon">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <rect x="1" y="1" width="6" height="6" rx="1"/>
+            <rect x="9" y="1" width="6" height="6" rx="1"/>
+            <rect x="1" y="9" width="6" height="6" rx="1"/>
+            <rect x="9" y="9" width="6" height="6" rx="1"/>
+          </svg>
+        </span>
+        Match
+      </a>
+      <a class="nav-item" data-mode="list" href="#">
+        <span class="nav-icon">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <path d="M2 4h12M2 8h12M2 12h8"/>
+          </svg>
+        </span>
+        All Terms
+      </a>
+    </nav>
+
+    <div class="sidebar-stats">
+      <div class="stats-label">Progress</div>
+      <div class="stat-row">
+        <span class="stat-lbl">Known</span>
+        <span class="stat-num known" id="stat-known">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-lbl">Still Learning</span>
+        <span class="stat-num learning" id="stat-learning">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-lbl">Not Studied</span>
+        <span class="stat-num" style="color:var(--gray-400)" id="stat-unseen">10</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ══ CONTENT AREA ════════════════════════════════════════════════ -->
+  <main class="content-area">
+
+    <!-- ── FLASHCARD VIEW ─────────────────────────────────────────── -->
+    <section id="flashcards-view" class="view active">
+      <div class="view-header">
+        <h2>Flashcards</h2>
+        <button class="btn-shuffle" id="btn-shuffle">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 4h10l-3-3M11 4l-3 3M1 12h10l-3-3M11 12l-3 3"/>
+          </svg>
+          Shuffle
+        </button>
+      </div>
+
+      <div class="progress-row">
+        <span class="progress-label" id="fc-counter">1 / 10</span>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="fc-progress" style="width:10%"></div>
+        </div>
+      </div>
+
+      <div class="card-container" id="card-container">
+        <div class="card" id="flashcard">
+          <div class="card-face card-front">
+            <div class="card-face-label">Term</div>
+            <div class="card-text" id="fc-term-text"></div>
+            <div class="card-hint">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M6 1v10M1 6h10" stroke-linecap="round"/>
+              </svg>
+              Click or press Space to flip
+            </div>
+          </div>
+          <div class="card-face card-back">
+            <div class="card-face-label">Definition</div>
+            <div class="card-text" id="fc-def-text"></div>
+            <div class="card-hint">Click to flip back</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fc-nav">
+        <button class="btn-nav" id="btn-prev" title="Previous (← Arrow)">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4L6 9l5 5"/>
+          </svg>
+        </button>
+
+        <div class="fc-actions">
+          <button class="btn-action btn-learning" id="btn-still-learning">Still Learning</button>
+          <button class="btn-action btn-know" id="btn-know">I Know This ✓</button>
+        </div>
+
+        <button class="btn-nav" id="btn-next" title="Next (→ Arrow)">
+          <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 4l5 5-5 5"/>
+          </svg>
+        </button>
+      </div>
+    </section>
+
+    <!-- ── LEARN VIEW ─────────────────────────────────────────────── -->
+    <section id="learn-view" class="view">
+      <div class="view-header">
+        <h2>Learn</h2>
+        <div class="header-meta">Score: <strong id="learn-score">0</strong> / <strong id="learn-total">0</strong></div>
+      </div>
+      <div id="learn-content">
+        <div class="learn-prompt">Choose the correct term for this definition:</div>
+        <div class="learn-definition" id="learn-def"></div>
+        <div class="learn-options" id="learn-options"></div>
+        <div class="learn-feedback" id="learn-feedback" style="display:none"></div>
+        <button class="btn-primary" id="btn-learn-next" style="display:none">Next Question →</button>
+      </div>
+    </section>
+
+    <!-- ── TEST VIEW ──────────────────────────────────────────────── -->
+    <section id="test-view" class="view">
+      <div class="view-header">
+        <h2>Test</h2>
+        <div class="header-meta">Score: <strong id="test-score">0</strong> / <strong id="test-total">0</strong></div>
+      </div>
+      <div id="test-content">
+        <div class="test-label">Type the definition for:</div>
+        <div class="test-term-card" id="test-term"></div>
+        <textarea class="test-textarea" id="test-input" placeholder="Type your answer here… (Enter to submit)"></textarea>
+        <div class="test-btn-row">
+          <button class="btn-primary" id="btn-test-submit">Check Answer</button>
+          <button class="btn-secondary" id="btn-test-next" style="display:none">Next →</button>
+        </div>
+        <div class="test-feedback" id="test-feedback" style="display:none; margin-top:12px;"></div>
+      </div>
+    </section>
+
+    <!-- ── MATCH VIEW ─────────────────────────────────────────────── -->
+    <section id="match-view" class="view">
+      <div class="view-header">
+        <h2>Match</h2>
+        <div class="match-meta">
+          <span class="match-stat">Time: <span id="match-timer">0:00</span></span>
+          <span class="match-stat">Pairs: <span id="match-matched">0</span> / <span id="match-pairs-total">6</span></span>
+        </div>
+      </div>
+      <div class="match-grid" id="match-grid"></div>
+      <div class="match-complete" id="match-complete" style="display:none">
+        <div class="complete-icon">🎉</div>
+        <h3>All Matched!</h3>
+        <p>Completed in <strong id="match-final-time"></strong></p>
+        <button class="btn-primary" id="btn-match-restart">Play Again</button>
+      </div>
+    </section>
+
+    <!-- ── LIST VIEW ──────────────────────────────────────────────── -->
+    <section id="list-view" class="view">
+      <div class="view-header">
+        <h2>All Terms</h2>
+        <input type="search" class="search-input" id="list-search" placeholder="Search…" />
+      </div>
+      <div class="term-list" id="term-list"></div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+'use strict';
+
+/* ══ 1. DATA ══════════════════════════════════════════════════════════ */
+const studySet = {
+  title: 'Computer Science Fundamentals',
+  description: 'Core CS vocabulary covering data structures, algorithms, and programming concepts.',
+  terms: [
+    { id: 1,  term: 'Algorithm',        def: 'A finite set of step-by-step instructions for solving a problem or accomplishing a task in a finite amount of time.' },
+    { id: 2,  term: 'Big O Notation',   def: 'A mathematical notation describing the upper-bound worst-case time or space complexity of an algorithm.' },
+    { id: 3,  term: 'Binary Tree',      def: 'A hierarchical data structure where each node has at most two children, known as the left child and the right child.' },
+    { id: 4,  term: 'Hash Table',       def: 'A data structure that maps keys to values using a hash function, enabling near-constant O(1) average-time lookups.' },
+    { id: 5,  term: 'Recursion',        def: 'A technique where a function calls itself with a smaller input to solve a problem, relying on a base case to terminate.' },
+    { id: 6,  term: 'Stack',            def: 'A last-in, first-out (LIFO) abstract data type. Elements are pushed onto and popped from the top of the stack.' },
+    { id: 7,  term: 'Queue',            def: 'A first-in, first-out (FIFO) abstract data type. Elements are enqueued at the back and dequeued from the front.' },
+    { id: 8,  term: 'Polymorphism',     def: 'In OOP, the ability for different object types to be treated as instances of the same class through a shared interface.' },
+    { id: 9,  term: 'Deadlock',         def: 'A situation in concurrent computing where two or more processes wait indefinitely for each other to release resources.' },
+    { id: 10, term: 'Memoization',      def: 'An optimization technique that caches the results of expensive function calls and returns the cached result on repeated inputs.' },
+  ]
+};
+
+/* ══ 2. STATE ════════════════════════════════════════════════════════ */
+const state = {
+  mode: 'flashcards',
+
+  fc: {
+    deck: [],
+    index: 0,
+    isFlipped: false,
+    knownIds: new Set(),
+    learningIds: new Set(),
+    seenIds: new Set(),
+  },
+
+  learn: {
+    queue: [],
+    index: 0,
+    score: 0,
+    answered: false,
+  },
+
+  test: {
+    queue: [],
+    index: 0,
+    score: 0,
+    submitted: false,
+  },
+
+  match: {
+    cards: [],
+    selectedIdx: null,
+    matchedCount: 0,
+    timerSecs: 0,
+    timerInterval: null,
+    started: false,
+  },
+};
+
+/* ══ 3. UTILITIES ════════════════════════════════════════════════════ */
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function formatTime(secs) {
+  return `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
+}
+
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* ══ 4. NAVIGATION ═══════════════════════════════════════════════════ */
+function switchMode(mode) {
+  // Stop match timer if leaving match
+  if (state.mode === 'match' && state.match.timerInterval) {
+    clearInterval(state.match.timerInterval);
+    state.match.timerInterval = null;
+  }
+
+  state.mode = mode;
+
+  document.querySelectorAll('.nav-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.mode === mode)
+  );
+
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(`${mode}-view`).classList.add('active');
+
+  const inits = { flashcards: initFlashcards, learn: initLearn, test: initTest, match: initMatch, list: initList };
+  inits[mode]?.();
+}
+
+document.querySelectorAll('.nav-item').forEach(el =>
+  el.addEventListener('click', e => { e.preventDefault(); switchMode(el.dataset.mode); })
+);
+
+/* ══ 5. FLASHCARD MODE ═══════════════════════════════════════════════ */
+function initFlashcards() {
+  const fc = state.fc;
+  if (fc.deck.length === 0) fc.deck = [...studySet.terms];
+  fc.index = 0;
+  fc.isFlipped = false;
+  renderFlashcard();
+}
+
+function renderFlashcard() {
+  const fc = state.fc;
+  const card = fc.deck[fc.index];
+
+  document.getElementById('fc-term-text').textContent = card.term;
+  document.getElementById('fc-def-text').textContent = card.def;
+  document.getElementById('fc-counter').textContent = `${fc.index + 1} / ${fc.deck.length}`;
+  document.getElementById('fc-progress').style.width = `${((fc.index + 1) / fc.deck.length) * 100}%`;
+
+  // Reset flip
+  const cardEl = document.getElementById('flashcard');
+  cardEl.classList.remove('flipped');
+  fc.isFlipped = false;
+
+  // Mark as seen
+  fc.seenIds.add(card.id);
+
+  updateSidebarStats();
+}
+
+function fcFlip() {
+  const cardEl = document.getElementById('flashcard');
+  state.fc.isFlipped = !state.fc.isFlipped;
+  cardEl.classList.toggle('flipped', state.fc.isFlipped);
+}
+
+function fcNext() {
+  const fc = state.fc;
+  if (fc.index < fc.deck.length - 1) { fc.index++; renderFlashcard(); }
+}
+
+function fcPrev() {
+  const fc = state.fc;
+  if (fc.index > 0) { fc.index--; renderFlashcard(); }
+}
+
+document.getElementById('flashcard').addEventListener('click', fcFlip);
+document.getElementById('btn-next').addEventListener('click', fcNext);
+document.getElementById('btn-prev').addEventListener('click', fcPrev);
+
+document.getElementById('btn-shuffle').addEventListener('click', () => {
+  state.fc.deck = shuffle(state.fc.deck);
+  state.fc.index = 0;
+  renderFlashcard();
+});
+
+document.getElementById('btn-know').addEventListener('click', () => {
+  const id = state.fc.deck[state.fc.index].id;
+  state.fc.knownIds.add(id);
+  state.fc.learningIds.delete(id);
+  updateSidebarStats();
+  fcNext();
+});
+
+document.getElementById('btn-still-learning').addEventListener('click', () => {
+  const id = state.fc.deck[state.fc.index].id;
+  state.fc.learningIds.add(id);
+  state.fc.knownIds.delete(id);
+  updateSidebarStats();
+  fcNext();
+});
+
+/* ══ 6. LEARN MODE ═══════════════════════════════════════════════════ */
+function initLearn() {
+  const learn = state.learn;
+  learn.queue = shuffle([...studySet.terms]);
+  learn.index = 0;
+  learn.score = 0;
+  learn.answered = false;
+  document.getElementById('learn-score').textContent = '0';
+  document.getElementById('learn-total').textContent = '0';
+  renderLearnQuestion();
+}
+
+function renderLearnQuestion() {
+  const learn = state.learn;
+
+  if (learn.index >= learn.queue.length) {
+    showLearnComplete();
+    return;
+  }
+
+  const current = learn.queue[learn.index];
+  learn.answered = false;
+
+  document.getElementById('learn-def').textContent = current.def;
+  document.getElementById('learn-feedback').style.display = 'none';
+  document.getElementById('btn-learn-next').style.display = 'none';
+
+  // 3 random distractors + 1 correct
+  const distractors = shuffle(studySet.terms.filter(t => t.id !== current.id)).slice(0, 3).map(t => t.term);
+  const options = shuffle([current.term, ...distractors]);
+
+  const container = document.getElementById('learn-options');
+  container.innerHTML = '';
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.textContent = opt;
+    btn.addEventListener('click', () => handleLearnAnswer(btn, opt, current.term));
+    container.appendChild(btn);
+  });
+}
+
+function handleLearnAnswer(clickedBtn, chosen, correct) {
+  if (state.learn.answered) return;
+  state.learn.answered = true;
+
+  const isCorrect = chosen === correct;
+
+  clickedBtn.classList.add(isCorrect ? 'correct' : 'wrong');
+
+  document.querySelectorAll('.option-btn').forEach(btn => {
+    btn.disabled = true;
+    if (btn.textContent === correct) btn.classList.add('correct');
+  });
+
+  if (isCorrect) state.learn.score++;
+
+  const idx = state.learn.index + 1;
+  document.getElementById('learn-score').textContent = state.learn.score;
+  document.getElementById('learn-total').textContent = idx;
+
+  const fb = document.getElementById('learn-feedback');
+  fb.style.display = 'block';
+  fb.className = `learn-feedback ${isCorrect ? 'correct-msg' : 'wrong-msg'}`;
+  fb.textContent = isCorrect ? '✓ Correct!' : `✗ The correct answer is: "${correct}"`;
+
+  document.getElementById('btn-learn-next').style.display = 'inline-block';
+}
+
+document.getElementById('btn-learn-next').addEventListener('click', () => {
+  state.learn.index++;
+  renderLearnQuestion();
+});
+
+function showLearnComplete() {
+  const { score, queue } = state.learn;
+  document.getElementById('learn-content').innerHTML = `
+    <div class="complete-card">
+      <div class="complete-icon">${score === queue.length ? '🏆' : score >= queue.length * 0.7 ? '🎉' : '📚'}</div>
+      <div class="complete-score">${score} / ${queue.length}</div>
+      <h3>${score === queue.length ? 'Perfect Score!' : 'Round Complete!'}</h3>
+      <p>${score >= queue.length * 0.7 ? 'Great work! Keep it up.' : 'Keep practicing — you\'ve got this!'}</p>
+      <button class="btn-primary" onclick="initLearn()">Try Again</button>
+    </div>
+  `;
+  // Restore the learn-content HTML on next init
+  const origLearnHTML = document.getElementById('learn-content').outerHTML;
+}
+
+/* ══ 7. TEST MODE ════════════════════════════════════════════════════ */
+function initTest() {
+  const test = state.test;
+  test.queue = shuffle([...studySet.terms]);
+  test.index = 0;
+  test.score = 0;
+  test.submitted = false;
+  document.getElementById('test-score').textContent = '0';
+  document.getElementById('test-total').textContent = '0';
+  renderTestQuestion();
+}
+
+function renderTestQuestion() {
+  const test = state.test;
+
+  if (test.index >= test.queue.length) {
+    showTestComplete();
+    return;
+  }
+
+  const current = test.queue[test.index];
+  test.submitted = false;
+
+  document.getElementById('test-term').textContent = current.term;
+  document.getElementById('test-input').value = '';
+  document.getElementById('test-input').disabled = false;
+  document.getElementById('test-feedback').style.display = 'none';
+  document.getElementById('test-feedback').className = 'test-feedback';
+  document.getElementById('btn-test-submit').style.display = 'inline-block';
+  document.getElementById('btn-test-next').style.display = 'none';
+
+  setTimeout(() => document.getElementById('test-input').focus(), 50);
+}
+
+function handleTestSubmit() {
+  if (state.test.submitted) return;
+  state.test.submitted = true;
+
+  const test = state.test;
+  const current = test.queue[test.index];
+  const userRaw = document.getElementById('test-input').value.trim();
+  const user = userRaw.toLowerCase();
+  const correct = current.def.toLowerCase();
+
+  // Accept if user input (min 4 chars) is a substring of correct answer or vice versa
+  const isCorrect = user.length >= 4 && (correct.includes(user) || user.includes(correct.slice(0, 30)));
+
+  document.getElementById('test-input').disabled = true;
+
+  if (isCorrect) test.score++;
+
+  const idx = test.index + 1;
+  document.getElementById('test-score').textContent = test.score;
+  document.getElementById('test-total').textContent = idx;
+
+  const fb = document.getElementById('test-feedback');
+  fb.style.display = 'block';
+  fb.className = `test-feedback ${isCorrect ? 'correct-msg' : 'wrong-msg'}`;
+  fb.textContent = isCorrect ? '✓ Correct!' : `✗ Correct answer: ${current.def}`;
+
+  document.getElementById('btn-test-submit').style.display = 'none';
+  document.getElementById('btn-test-next').style.display = 'inline-block';
+}
+
+document.getElementById('btn-test-submit').addEventListener('click', handleTestSubmit);
+
+document.getElementById('test-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleTestSubmit(); }
+});
+
+document.getElementById('btn-test-next').addEventListener('click', () => {
+  state.test.index++;
+  renderTestQuestion();
+});
+
+function showTestComplete() {
+  const { score, queue } = state.test;
+  document.getElementById('test-content').innerHTML = `
+    <div class="complete-card">
+      <div class="complete-icon">${score === queue.length ? '🏆' : '📝'}</div>
+      <div class="complete-score">${score} / ${queue.length}</div>
+      <h3>${score === queue.length ? 'Perfect Score!' : 'Test Complete!'}</h3>
+      <p>${score >= queue.length * 0.7 ? 'Well done! You really know this material.' : 'Review the terms and try again!'}</p>
+      <button class="btn-primary" onclick="initTest()">Retry Test</button>
+    </div>
+  `;
+}
+
+/* ══ 8. MATCH MODE ═══════════════════════════════════════════════════ */
+function initMatch() {
+  const match = state.match;
+
+  if (match.timerInterval) { clearInterval(match.timerInterval); match.timerInterval = null; }
+
+  const pairs = shuffle([...studySet.terms]).slice(0, 6);
+  match.cards = [];
+
+  pairs.forEach(pair => {
+    match.cards.push({ uid: `t${pair.id}`, type: 'term', text: pair.term, pairId: pair.id, matched: false, selected: false });
+    match.cards.push({ uid: `d${pair.id}`, type: 'def',  text: pair.def,  pairId: pair.id, matched: false, selected: false });
+  });
+
+  match.cards = shuffle(match.cards);
+  match.selectedIdx = null;
+  match.matchedCount = 0;
+  match.timerSecs = 0;
+  match.started = false;
+
+  document.getElementById('match-complete').style.display = 'none';
+  document.getElementById('match-timer').textContent = '0:00';
+  document.getElementById('match-matched').textContent = '0';
+  document.getElementById('match-pairs-total').textContent = '6';
+
+  renderMatchGrid();
+}
+
+function renderMatchGrid() {
+  const container = document.getElementById('match-grid');
+  container.innerHTML = '';
+
+  state.match.cards.forEach((card, idx) => {
+    const el = document.createElement('div');
+    el.className = 'match-card';
+    el.dataset.idx = idx;
+    el.textContent = card.text;
+    if (card.matched)  el.classList.add('matched');
+    if (card.selected) el.classList.add('selected');
+    el.addEventListener('click', () => handleMatchClick(idx));
+    container.appendChild(el);
+  });
+}
+
+function handleMatchClick(clickedIdx) {
+  const match = state.match;
+  const clicked = match.cards[clickedIdx];
+
+  if (clicked.matched || clicked.selected) return;
+
+  // Start timer on first interaction
+  if (!match.started) {
+    match.started = true;
+    match.timerInterval = setInterval(() => {
+      match.timerSecs++;
+      document.getElementById('match-timer').textContent = formatTime(match.timerSecs);
+    }, 1000);
+  }
+
+  if (match.selectedIdx === null) {
+    // First selection
+    clicked.selected = true;
+    match.selectedIdx = clickedIdx;
+    renderMatchGrid();
+    return;
+  }
+
+  const prevIdx = match.selectedIdx;
+  const prev = match.cards[prevIdx];
+
+  if (prevIdx === clickedIdx) {
+    // Deselect same card
+    clicked.selected = false;
+    match.selectedIdx = null;
+    renderMatchGrid();
+    return;
+  }
+
+  if (prev.pairId === clicked.pairId && prev.type !== clicked.type) {
+    // MATCH!
+    prev.matched = true;
+    clicked.matched = true;
+    prev.selected = false;
+    match.selectedIdx = null;
+    match.matchedCount++;
+    document.getElementById('match-matched').textContent = match.matchedCount;
+    renderMatchGrid();
+
+    if (match.matchedCount === 6) {
+      clearInterval(match.timerInterval);
+      match.timerInterval = null;
+      document.getElementById('match-final-time').textContent = formatTime(match.timerSecs);
+      setTimeout(() => {
+        document.getElementById('match-complete').style.display = 'block';
+      }, 500);
+    }
+  } else {
+    // NO MATCH — flash wrong on both cards, then deselect
+    // Apply flash directly to current DOM before re-render
+    document.querySelectorAll('.match-card').forEach(el => {
+      const i = parseInt(el.dataset.idx);
+      if (i === prevIdx || i === clickedIdx) el.classList.add('wrong-flash');
+    });
+
+    prev.selected = false;
+    match.selectedIdx = null;
+
+    setTimeout(() => {
+      renderMatchGrid();
+    }, 480);
+  }
+}
+
+document.getElementById('btn-match-restart').addEventListener('click', initMatch);
+
+/* ══ 9. LIST VIEW ════════════════════════════════════════════════════ */
+function initList() {
+  document.getElementById('list-search').value = '';
+  renderList('');
+}
+
+function renderList(filter) {
+  const q = filter.toLowerCase().trim();
+  const container = document.getElementById('term-list');
+  container.innerHTML = '';
+
+  const filtered = studySet.terms.filter(t =>
+    t.term.toLowerCase().includes(q) || t.def.toLowerCase().includes(q)
+  );
+
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="no-results">No terms match "<em>${escHtml(filter)}</em>"</div>`;
+    return;
+  }
+
+  filtered.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'term-row';
+    row.innerHTML = `
+      <div class="term-col">${escHtml(t.term)}</div>
+      <div class="term-divider"></div>
+      <div class="def-col">${escHtml(t.def)}</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
+document.getElementById('list-search').addEventListener('input', e => renderList(e.target.value));
+
+/* ══ 10. KEYBOARD HANDLERS ═══════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  if (state.mode !== 'flashcards') return;
+  const tag = document.activeElement.tagName;
+  if (['INPUT','TEXTAREA','SELECT','BUTTON'].includes(tag)) return;
+
+  switch (e.key) {
+    case ' ':
+    case 'Enter':
+      e.preventDefault();
+      fcFlip();
+      break;
+    case 'ArrowRight':
+      e.preventDefault();
+      fcNext();
+      break;
+    case 'ArrowLeft':
+      e.preventDefault();
+      fcPrev();
+      break;
+    case 'ArrowUp':
+      e.preventDefault();
+      document.getElementById('btn-know').click();
+      break;
+    case 'ArrowDown':
+      e.preventDefault();
+      document.getElementById('btn-still-learning').click();
+      break;
+  }
+});
+
+/* ══ 11. SIDEBAR STATS ═══════════════════════════════════════════════ */
+function updateSidebarStats() {
+  const { knownIds, learningIds } = state.fc;
+  const total = studySet.terms.length;
+  const known = knownIds.size;
+  const learning = learningIds.size;
+  const unseen = total - known - learning;
+
+  document.getElementById('stat-known').textContent = known;
+  document.getElementById('stat-learning').textContent = learning;
+  document.getElementById('stat-unseen').textContent = Math.max(0, unseen);
+}
+
+/* ══ 12. LEARN MODE – HTML RESTORATION ══════════════════════════════ */
+// Store the original Learn HTML so initLearn can reset it after the complete screen
+const _learnHTML = document.getElementById('learn-content').innerHTML;
+const _testHTML  = document.getElementById('test-content').innerHTML;
+
+const _origInitLearn = initLearn;
+// Wrap initLearn to restore HTML first
+window.initLearn = function() {
+  document.getElementById('learn-content').innerHTML = _learnHTML;
+  // Re-bind button (since innerHTML replaced it)
+  document.getElementById('btn-learn-next').addEventListener('click', () => {
+    state.learn.index++;
+    renderLearnQuestion();
+  });
+  _origInitLearn();
+};
+
+const _origInitTest = initTest;
+window.initTest = function() {
+  document.getElementById('test-content').innerHTML = _testHTML;
+  document.getElementById('btn-test-submit').addEventListener('click', handleTestSubmit);
+  document.getElementById('btn-test-next').addEventListener('click', () => { state.test.index++; renderTestQuestion(); });
+  document.getElementById('test-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleTestSubmit(); }
+  });
+  _origInitTest();
+};
+
+/* ══ 13. INIT ════════════════════════════════════════════════════════ */
+(function init() {
+  document.getElementById('sidebar-title').textContent = studySet.title;
+  document.getElementById('sidebar-count').textContent = `${studySet.terms.length} terms`;
+  state.fc.deck = [...studySet.terms];
+  initFlashcards();
+  updateSidebarStats();
+})();
+</script>
+</body>
+</html>

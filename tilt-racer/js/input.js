@@ -85,8 +85,7 @@ export class Input {
   }
 
   calibrate() {
-    // Centring only makes sense for a small offset from level.
-    this.settings.tiltOffset = clamp(this.rawTilt, -25, 25);
+    this.settings.tiltOffset = this.rawTilt;
   }
 
   bindButton(el, name) {
@@ -123,7 +122,7 @@ export class Input {
 
   tiltSteer() {
     const st = this.settings;
-    let a = this.rawTilt - clamp(st.tiltOffset || 0, -25, 25);
+    let a = this.rawTilt - (st.tiltOffset || 0);
     if (st.invertTilt) a = -a;
     // Sensitivity 1..10 maps to 42..14 degrees of tilt for full lock.
     const range = 46 - st.sensitivity * 3.2;

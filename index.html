@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>AppsCode-26</title>
+  <link rel="icon" href="tilt-racer/icons/icon.svg" type="image/svg+xml" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+      background: radial-gradient(ellipse at 50% 120%, rgba(255, 140, 0, 0.25), transparent 60%), #0b0f17;
+      color: #f3f5f8;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: calc(32px + env(safe-area-inset-top)) 20px 32px;
+    }
+    h1 { font-size: 34px; font-style: italic; font-weight: 900; margin: 0 0 24px; }
+    .grid { display: grid; gap: 16px; width: min(760px, 100%); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    a.card {
+      display: block;
+      padding: 22px;
+      border-radius: 20px;
+      background: rgba(20, 26, 39, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: inherit;
+      text-decoration: none;
+    }
+    a.card:active { transform: scale(0.98); }
+    a.card.main { border-color: #ffb300; box-shadow: 0 0 30px rgba(255, 179, 0, 0.2); }
+    .card img { width: 64px; height: 64px; border-radius: 14px; }
+    .card h2 { margin: 12px 0 6px; font-size: 24px; font-style: italic; }
+    .card p { margin: 0; color: #9aa6b8; line-height: 1.45; }
+    .play {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 10px 18px;
+      border-radius: 12px;
+      font-weight: 800;
+      background: linear-gradient(180deg, #ffc233, #ff9500);
+      color: #1a1000;
+    }
+  </style>
+</head>
+<body>
+  <h1>AppsCode-26</h1>
+  <div class="grid">
+    <a class="card main" href="tilt-racer/">
+      <img src="tilt-racer/icons/icon-192.png" alt="" />
+      <h2>Tilt Racer</h2>
+      <p>3D driving game for iPad. Tilt to steer, free drive, dirt racing against AI and an upgradeable garage.</p>
+      <span class="play">PLAY</span>
+    </a>
+    <a class="card" href="DJI%20Battery/">
+      <h2>LED Monitor</h2>
+      <p>Uses the camera to watch a DJI battery's LEDs.</p>
+    </a>
+  </div>
+</body>
+</html>

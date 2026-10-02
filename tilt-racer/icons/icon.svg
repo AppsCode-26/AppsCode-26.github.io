@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b2438"/>
+      <stop offset="1" stop-color="#0b0f17"/>
+    </linearGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffc233"/>
+      <stop offset="1" stop-color="#ff7a00"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <g transform="rotate(-14 256 256)">
+    <circle cx="256" cy="256" r="150" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="34"/>
+    <rect x="116" y="240" width="280" height="32" rx="16" fill="#ffffff" fill-opacity="0.9"/>
+    <rect x="240" y="256" width="32" height="140" rx="16" fill="#ffffff" fill-opacity="0.9"/>
+    <circle cx="256" cy="256" r="40" fill="url(#road)"/>
+    <rect x="244" y="96" width="24" height="44" rx="10" fill="url(#road)"/>
+  </g>
+  <text x="256" y="470" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-style="italic" font-size="64" text-anchor="middle" fill="#ffb300">TILT</text>
+</svg>

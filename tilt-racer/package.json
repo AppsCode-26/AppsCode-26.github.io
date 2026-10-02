@@ -1,0 +1,10 @@
+{
+  "name": "tilt-racer",
+  "private": true,
+  "type": "module",
+  "description": "Tilt Racer - browser driving game with iPad gyroscope steering",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "serve": "npx serve ."
+  }
+}

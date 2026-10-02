@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Tilt Racer" />
+  <meta name="theme-color" content="#0b0f17" />
+  <title>Tilt Racer</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="gl"></canvas>
+
+    <!-- ============================================================ HUD -->
+    <div id="hud" class="hidden">
+      <div id="hud-tl" class="panel glass">
+        <div id="race-info" class="hidden">
+          <div class="row big"><span class="lbl">POS</span><span id="h-pos">1/6</span></div>
+          <div class="row"><span class="lbl">LAP</span><span id="h-lap">1/3</span></div>
+          <div class="row"><span class="lbl">TIME</span><span id="h-time">0:00.00</span></div>
+          <div class="row"><span class="lbl">BEST</span><span id="h-best">--:--.--</span></div>
+        </div>
+        <div id="free-info" class="hidden">
+          <div class="row big"><span class="coin-ico"></span><span id="h-coins">0</span></div>
+          <div class="row"><span class="lbl">DIST</span><span id="h-dist">0.0 km</span></div>
+          <div class="row small" id="h-area">Free Drive</div>
+        </div>
+      </div>
+      <div id="hud-tr">
+        <div class="btn-row">
+          <button class="icon-btn" id="b-reset" title="Reset car">&#x21BA;</button>
+          <button class="icon-btn" id="b-cam" title="Camera">&#x1F3A5;</button>
+          <button class="icon-btn" id="b-pause" title="Pause">&#x275A;&#x275A;</button>
+        </div>
+        <canvas id="minimap" width="200" height="200"></canvas>
+      </div>
+      <div id="hud-msg"></div>
+      <div id="hud-sub"></div>
+      <div id="toasts"></div>
+
+      <div id="speedo">
+        <svg viewBox="0 0 200 200" class="gauge">
+          <path class="g-bg" d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" />
+          <path class="g-red" d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" />
+          <path id="g-rpm" class="g-fg" d="M 43.43 156.57 A 80 80 0 1 1 156.57 156.57" />
+        </svg>
+        <div class="speed-num"><span id="h-speed">0</span><small id="h-unit">km/h</small></div>
+        <div class="gear" id="h-gear">N</div>
+        <div class="assist" id="h-wheel"><div class="wheel-ico" id="h-wheel-ico"></div></div>
+      </div>
+
+      <div id="controls">
+        <div id="steer-btns" class="hidden">
+          <div class="ctl steer" id="c-left">&#x25C0;</div>
+          <div class="ctl steer" id="c-right">&#x25B6;</div>
+        </div>
+        <div class="ctl pedal brake" id="c-brake"><span>BRAKE</span><small>hold to reverse</small></div>
+        <div class="right-ctl">
+          <div class="ctl hand" id="c-hand">HANDBRAKE</div>
+          <div class="ctl pedal gas" id="c-gas"><span>GAS</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== SCREENS -->
+    <div id="screen-title" class="screen title-screen">
+      <div class="title-wrap">
+        <div class="logo">TILT<span>RACER</span></div>
+        <div class="tagline">Tilt your iPad to steer</div>
+        <button class="big-btn primary" id="b-start">TAP TO START</button>
+        <div class="hint" id="title-hint">
+          Hold your iPad in landscape like a steering wheel.<br />
+          Turn on <b>Rotation Lock</b> in Control Center so tilting doesn't rotate the screen.<br />
+          Tip: Share &rarr; <b>Add to Home Screen</b> to play full screen.
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-menu" class="screen hidden">
+      <div class="menu-top">
+        <div class="logo small">TILT<span>RACER</span></div>
+        <div class="coins-pill"><span class="coin-ico"></span><span class="coins-val">0</span></div>
+      </div>
+      <div class="menu-grid">
+        <button class="menu-card" id="m-free">
+          <div class="mc-ico">&#x1F30D;</div>
+          <div class="mc-title">FREE DRIVE</div>
+          <div class="mc-sub">Open world: highway, town, lake, forest trails, airfield &amp; jump quarry</div>
+        </button>
+        <button class="menu-card" id="m-race">
+          <div class="mc-ico">&#x1F3C1;</div>
+          <div class="mc-title">DIRT RACE</div>
+          <div class="mc-sub">Race 5 AI drivers on dirt tracks and beat their times</div>
+        </button>
+        <button class="menu-card" id="m-garage">
+          <div class="mc-ico">&#x1F527;</div>
+          <div class="mc-title">GARAGE</div>
+          <div class="mc-sub">Pick your car, upgrade engine, handling &amp; tyres</div>
+        </button>
+        <button class="menu-card" id="m-settings">
+          <div class="mc-ico">&#x2699;&#xFE0F;</div>
+          <div class="mc-title">SETTINGS</div>
+          <div class="mc-sub">Tilt sensitivity, calibration, assists, graphics</div>
+        </button>
+      </div>
+      <div class="menu-car" id="menu-car">Driving: <b id="menu-car-name">-</b></div>
+      <div class="portrait-hint">Rotate to landscape for the best experience</div>
+    </div>
+
+    <div id="screen-garage" class="screen hidden garage">
+      <div class="g-top">
+        <button class="back-btn" data-back="menu">&#x2039; Back</button>
+        <div class="g-title">GARAGE</div>
+        <div class="coins-pill"><span class="coin-ico"></span><span class="coins-val">0</span></div>
+      </div>
+      <div class="g-body">
+        <div class="g-left glass">
+          <div class="g-class" id="g-class">Sports Car</div>
+          <div class="g-name" id="g-name">Vortex GT</div>
+          <div class="g-desc" id="g-desc"></div>
+          <div class="g-specs" id="g-specs"></div>
+          <div class="stats" id="g-stats"></div>
+          <div class="g-colors" id="g-colors"></div>
+        </div>
+        <div class="g-center">
+          <button class="arrow-btn" id="g-prev">&#x2039;</button>
+          <button class="arrow-btn" id="g-next">&#x203A;</button>
+        </div>
+        <div class="g-right glass">
+          <div class="g-sec">UPGRADES</div>
+          <div id="g-upgrades"></div>
+          <button class="big-btn primary" id="g-select">SELECT &amp; DRIVE</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-tracks" class="screen hidden">
+      <div class="g-top">
+        <button class="back-btn" data-back="menu">&#x2039; Back</button>
+        <div class="g-title">DIRT RACE</div>
+        <div class="coins-pill"><span class="coin-ico"></span><span class="coins-val">0</span></div>
+      </div>
+      <div class="track-list" id="track-list"></div>
+      <div class="race-opts glass">
+        <div class="opt">
+          <span class="lbl">AI DIFFICULTY</span>
+          <div class="seg" id="opt-diff">
+            <button data-v="easy">Easy</button><button data-v="medium">Medium</button><button data-v="hard">Hard</button>
+          </div>
+        </div>
+        <div class="opt">
+          <span class="lbl">LAPS</span>
+          <div class="seg" id="opt-laps">
+            <button data-v="0">Default</button><button data-v="1">1</button><button data-v="3">3</button><button data-v="5">5</button>
+          </div>
+        </div>
+        <div class="opt car-opt">Your car: <b id="race-car-name">-</b> <button class="link-btn" id="race-garage">change</button></div>
+        <button class="big-btn primary" id="b-race-start">START RACE</button>
+      </div>
+    </div>
+
+    <div id="screen-settings" class="screen hidden">
+      <div class="g-top">
+        <button class="back-btn" id="settings-back">&#x2039; Back</button>
+        <div class="g-title">SETTINGS</div>
+        <div></div>
+      </div>
+      <div class="settings glass">
+        <div class="set-row">
+          <div class="set-lbl">Steering</div>
+          <div class="seg" id="s-steer"><button data-v="tilt">Tilt (gyroscope)</button><button data-v="buttons">Touch buttons</button></div>
+        </div>
+        <div class="set-row">
+          <div class="set-lbl">Tilt sensitivity <small id="s-sens-val"></small></div>
+          <input type="range" id="s-sens" min="1" max="10" step="1" />
+        </div>
+        <div class="set-row">
+          <div class="set-lbl">Tilt live view</div>
+          <div class="tilt-meter"><div class="tilt-zero"></div><div class="tilt-needle" id="s-tilt-needle"></div></div>
+          <button class="small-btn" id="s-calib">Calibrate centre</button>
+        </div>
+        <div class="set-row">
+          <div class="set-lbl">Invert tilt direction</div>
+          <label class="switch"><input type="checkbox" id="s-invert" /><span></span></label>
+        </div>
+        <div class="set-row">
+          <div class="set-lbl">Auto accelerate</div>
+          <label class="switch"><input type="checkbox" id="s-autogas" /><span></span></label>
+        </div>
+        <div class="set-row">
+          <div class="set-lbl">Driving assists <small>(traction &amp; stability control)</small></div>
+          <label class="switch"><input type="checkbox" id="s-assists" /><span></span></label>
+        </div>
+        <div class="set-row">
+          <div class="set-lbl">Speed units</div>
+          <div class="seg" id="s-units"><button data-v="kmh">km/h</button><button data-v="mph">mph</button></div>
+        </div>
+        <div class="set-row">
+          <div class="set-lbl">Graphics</div>
+          <div class="seg" id="s-quality"><button data-v="auto">Auto</button><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
+        </div>
+        <div class="set-row">
+          <div class="set-lbl">Sound volume</div>
+          <input type="range" id="s-volume" min="0" max="1" step="0.05" />
+        </div>
+        <div class="set-row">
+          <div class="set-lbl">Progress</div>
+          <button class="small-btn danger" id="s-reset">Reset coins &amp; upgrades</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-pause" class="screen hidden dim">
+      <div class="pause-box glass">
+        <div class="g-title">PAUSED</div>
+        <button class="big-btn primary" id="p-resume">RESUME</button>
+        <button class="big-btn" id="p-restart">RESTART</button>
+        <button class="big-btn" id="p-calib">CALIBRATE TILT</button>
+        <button class="big-btn" id="p-settings">SETTINGS</button>
+        <button class="big-btn" id="p-quit">QUIT TO MENU</button>
+        <div class="hint small">Hold the iPad the way you like to drive, then tap Calibrate.</div>
+      </div>
+    </div>
+
+    <div id="screen-results" class="screen hidden dim">
+      <div class="results-box glass">
+        <div class="g-title" id="r-title">RACE RESULTS</div>
+        <div class="r-sub" id="r-sub"></div>
+        <table class="r-table" id="r-table"></table>
+        <div class="r-reward" id="r-reward"></div>
+        <div class="r-btns">
+          <button class="big-btn primary" id="r-again">RACE AGAIN</button>
+          <button class="big-btn" id="r-garage">GARAGE</button>
+          <button class="big-btn" id="r-menu">MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="screen-loading" class="screen hidden dim">
+      <div class="loading"><div class="spinner"></div><div id="loading-text">Building world…</div></div>
+    </div>
+
+  </div>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

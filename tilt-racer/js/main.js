@@ -37,12 +37,24 @@ function quality() {
   return isTouch ? 'medium' : 'high';
 }
 
+// Dynamic resolution (Graphics: Auto only).
 let dynScale = 1;
+let frameAvg = 16.7;
+let scaleCooldown = 3;
+let stepAvg = 0;
 function applyPixelRatio() {
   const q = quality();
   const cap = q === 'low' ? 1 : q === 'medium' ? 1.5 : 2;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap) * dynScale);
+  const s = settings.quality === 'auto' ? dynScale : 1;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, cap) * s);
   renderer.setSize(window.innerWidth, window.innerHeight, false);
+}
+function resetDynamicResolution() {
+  dynScale = 1;
+  frameAvg = 16.7;
+  scaleCooldown = 3;
+  stepAvg = 0;
+  applyPixelRatio();
 }
 
 const input = new Input(settings);
@@ -820,6 +832,7 @@ async function startSession(mode, opts) {
   }
   // Warm up shaders before showing the scene.
   renderer.compile(session.scene, session.camera);
+  resetDynamicResolution();
   show('none');
   $('screen-loading').classList.add('hidden');
   $('hud').classList.remove('hidden');
@@ -841,6 +854,7 @@ function endSession() {
     session = null;
   }
   persist();
+  resetDynamicResolution();
   audio.setActive(false);
   $('hud').classList.add('hidden');
   setMsg('');
@@ -1100,7 +1114,7 @@ bindSeg('s-units', (v) => {
 bindSeg('s-quality', (v) => {
   settings.quality = v;
   persist();
-  applyPixelRatio();
+  resetDynamicResolution();
 });
 $('s-sens').oninput = (e) => {
   settings.sensitivity = +e.target.value;
@@ -1264,8 +1278,6 @@ async function requestWakeLock() {
 
 // ================================================================ MAIN LOOP
 let last = performance.now();
-let frameAvg = 16;
-let scaleCooldown = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   let dt = (now - last) / 1000;
@@ -1281,10 +1293,21 @@ function frame(now) {
     scaleCooldown -= dt;
     if (scaleCooldown <= 0 && settings.quality === 'auto') {
       if (frameAvg > 26 && dynScale > 0.6) {
-        dynScale = Math.max(0.6, dynScale - 0.1);
-        applyPixelRatio();
-        scaleCooldown = 2;
+        if (stepAvg && frameAvg > stepAvg * 0.92) {
+          // The last step didn't help: the frame rate is capped (Low Power
+          // Mode / heat) or CPU-bound, so lowering resolution only blurs it.
+          // Undo the step and stop adjusting for this session.
+          dynScale = Math.min(1, dynScale + 0.1);
+          applyPixelRatio();
+          scaleCooldown = Infinity;
+        } else {
+          stepAvg = frameAvg;
+          dynScale = Math.max(0.6, dynScale - 0.1);
+          applyPixelRatio();
+          scaleCooldown = 2;
+        }
       } else if (frameAvg < 17 && dynScale < 1) {
+        stepAvg = 0;
         dynScale = Math.min(1, dynScale + 0.05);
         applyPixelRatio();
         scaleCooldown = 4;
@@ -1310,4 +1333,4 @@ show('title');
 requestAnimationFrame(frame);
 
 // Expose for debugging / automated tests.
-window.__tilt = { get session() { return session; }, input, save, startSession, show, garage, cycleGarage };
+window.__tilt = { get session() { return session; }, input, save, startSession, show, garage, cycleGarage, renderer };

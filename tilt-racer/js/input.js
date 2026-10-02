@@ -17,8 +17,6 @@ export class Input {
     this.keys = new Set();
     this.touch = { gas: 0, brake: 0, hand: 0, left: 0, right: 0 };
     this._kbSteer = 0;
-    this._screenSign = 1;
-    this._downAvg = 0;
     this.onKey = null;
     window.addEventListener('keydown', (e) => {
       if (e.repeat) return;
@@ -53,10 +51,21 @@ export class Input {
     return true;
   }
 
+  // Angle the screen content is rotated from the frame deviceorientation uses.
+  // On iOS beta/gamma are always relative to portrait, and window.orientation
+  // (0, 90, -90, 180) is measured from portrait too, so prefer it. On iPad,
+  // screen.orientation.angle is measured from *landscape* (0/180 when held
+  // sideways) and its sign changed between iPadOS versions, so only use it
+  // as a fallback for browsers without window.orientation.
   _screenAngle() {
-    const so = window.screen && window.screen.orientation;
-    if (so && typeof so.angle === 'number') return so.angle;
     if (typeof window.orientation === 'number') return window.orientation;
+    const so = window.screen && window.screen.orientation;
+    if (so && so.type && typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      // iOS without window.orientation: derive a portrait-based angle from the type.
+      const byType = { 'portrait-primary': 0, 'landscape-primary': 90, 'portrait-secondary': 180, 'landscape-secondary': -90 };
+      if (so.type in byType) return byType[so.type];
+    }
+    if (so && typeof so.angle === 'number') return so.angle;
     return 0;
   }
 
@@ -68,26 +77,16 @@ export class Input {
     // Gravity direction in device coordinates (x right, y up the screen).
     const dx = Math.cos(b) * Math.sin(g);
     const dy = -Math.sin(b);
-    const th = this._screenAngle() * DEG * this._screenSign;
+    const th = this._screenAngle() * DEG;
     // Rotate into screen coordinates.
     const sx = Math.cos(th) * dx - Math.sin(th) * dy;
-    const sy = Math.sin(th) * dx + Math.cos(th) * dy;
-    // Held normally, gravity points toward the bottom of the screen. If it
-    // consistently looks the other way the browser's rotation sign is
-    // flipped, so correct it automatically.
-    if (Math.abs(sy) > 0.35 && Math.abs(Math.sin(th)) > 0.5) {
-      this._downAvg = this._downAvg * 0.95 + Math.sign(sy) * 0.05;
-      if (this._downAvg > 0.6) {
-        this._screenSign *= -1;
-        this._downAvg = -0.6;
-      }
-    }
     // Right edge down = positive = steer right.
     this.rawTilt = Math.asin(clamp(sx, -1, 1)) / DEG;
   }
 
   calibrate() {
-    this.settings.tiltOffset = this.rawTilt;
+    // Centring only makes sense for a small offset from level.
+    this.settings.tiltOffset = clamp(this.rawTilt, -25, 25);
   }
 
   bindButton(el, name) {
@@ -124,7 +123,7 @@ export class Input {
 
   tiltSteer() {
     const st = this.settings;
-    let a = this.rawTilt - (st.tiltOffset || 0);
+    let a = this.rawTilt - clamp(st.tiltOffset || 0, -25, 25);
     if (st.invertTilt) a = -a;
     // Sensitivity 1..10 maps to 42..14 degrees of tilt for full lock.
     const range = 46 - st.sensitivity * 3.2;

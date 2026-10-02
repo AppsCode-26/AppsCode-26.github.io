@@ -93,11 +93,55 @@ function slopeGlass(z1, y1, z2, y2, width, mat, lift = 0.04) {
   return m;
 }
 
+// Merge every single-material child mesh of `group` that shares a material
+// into one mesh. A car is built from ~100 small parts; merging brings it down
+// to roughly one draw call per material, which matters a lot on iPad where
+// every WebGL call is expensive (six cars in a race, plus the shadow pass).
+function mergeByMaterial(group) {
+  const buckets = new Map();
+  for (const child of group.children.slice()) {
+    if (!child.isMesh || Array.isArray(child.material)) continue;
+    child.updateMatrix();
+    const g = child.geometry.index ? child.geometry.toNonIndexed() : child.geometry.clone();
+    g.applyMatrix4(child.matrix);
+    if (!buckets.has(child.material)) buckets.set(child.material, []);
+    buckets.get(child.material).push(g);
+    group.remove(child);
+    child.geometry.dispose();
+  }
+  for (const [material, geos] of buckets) {
+    let count = 0;
+    for (const g of geos) count += g.attributes.position.count;
+    const pos = new Float32Array(count * 3);
+    const nor = new Float32Array(count * 3);
+    const uv = new Float32Array(count * 2);
+    let o = 0;
+    for (const g of geos) {
+      const n = g.attributes.position.count;
+      pos.set(g.attributes.position.array, o * 3);
+      if (g.attributes.normal) nor.set(g.attributes.normal.array, o * 3);
+      if (g.attributes.uv) uv.set(g.attributes.uv.array, o * 2);
+      o += n;
+      g.dispose();
+    }
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    merged.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+    merged.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    merged.computeBoundingSphere();
+    group.add(new THREE.Mesh(merged, material));
+  }
+}
+
 function wheel(radius, width, rimMat, caliperMat, spokes = 5, chunky = false) {
   const M = mats();
   const spin = new THREE.Group();
-  const tire = cyl(radius, width, [M.tire, M.tireSide, M.tireSide], 28);
-  tire.material = [M.tire, M.tireSide, M.tireSide];
+  const tire = cyl(radius, width, [M.tire, M.tireSide], 28);
+  // Caps are contiguous after the tread: draw them as one group.
+  const tg = tire.geometry.groups;
+  tire.geometry.clearGroups();
+  tire.geometry.addGroup(tg[0].start, tg[0].count, 0);
+  tire.geometry.addGroup(tg[1].start, tg[1].count + tg[2].count, 1);
   spin.add(tire);
   if (chunky) {
     // Off-road tread blocks.
@@ -127,6 +171,7 @@ function wheel(radius, width, rimMat, caliperMat, spokes = 5, chunky = false) {
   const disc = cyl(rimR * 0.82, 0.03, M.disc, 20);
   disc.position.x = -width * 0.05;
   spin.add(disc);
+  mergeByMaterial(spin);
   const steer = new THREE.Group();
   steer.add(spin);
   if (caliperMat) {
@@ -441,10 +486,13 @@ export function buildCarModel(type, color, opts = {}) {
     tailMat = buildRally(body, spec, paintMat, def.width, opts.accent || 0x1555c0, opts.number ?? 7);
     wheelOpts = { tireWidth: 0.25, rimMat: new THREE.MeshStandardMaterial({ color: 0xf0f0f0, metalness: 0.5, roughness: 0.35 }), caliper: M.caliperGold, spokes: 6, chunky: false };
   }
+  mergeByMaterial(body);
   const wheels = addWheels(root, spec, wheelOpts);
+  // Only parts big enough to matter cast shadows (keeps the shadow pass cheap).
   root.traverse((o) => {
     if (o.isMesh) {
-      o.castShadow = true;
+      if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
+      o.castShadow = o.geometry.boundingSphere.radius * Math.abs(o.scale.x) > 0.3;
       o.receiveShadow = false;
     }
   });

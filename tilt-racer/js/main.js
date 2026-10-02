@@ -1292,8 +1292,11 @@ function frame(now) {
     frameAvg = frameAvg * 0.95 + dt * 1000 * 0.05;
     scaleCooldown -= dt;
     if (scaleCooldown <= 0 && settings.quality === 'auto') {
+      // Only the first check after a step may judge whether that step helped.
+      const prevStepAvg = stepAvg;
+      stepAvg = 0;
       if (frameAvg > 26 && dynScale > 0.6) {
-        if (stepAvg && frameAvg > stepAvg * 0.92) {
+        if (prevStepAvg && frameAvg > prevStepAvg * 0.92) {
           // The last step didn't help: the frame rate is capped (Low Power
           // Mode / heat) or CPU-bound, so lowering resolution only blurs it.
           // Undo the step and stop adjusting for this session.
@@ -1307,7 +1310,6 @@ function frame(now) {
           scaleCooldown = 2;
         }
       } else if (frameAvg < 17 && dynScale < 1) {
-        stepAvg = 0;
         dynScale = Math.min(1, dynScale + 0.05);
         applyPixelRatio();
         scaleCooldown = 4;

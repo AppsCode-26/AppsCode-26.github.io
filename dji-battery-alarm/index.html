@@ -1,0 +1,1598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Charge alarm</title>
+<meta name="description" content="Point your phone at a DJI charging hub. It watches the battery lights and rings when a battery reaches the number of lights you pick.">
+<meta name="theme-color" content="#E9ECEA" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#15191B" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='9' width='28' height='14' rx='4' fill='%23E9ECEA' stroke='%2323292C' stroke-width='2'/%3E%3Crect x='6' y='13' width='4' height='6' rx='1' fill='%2322B847'/%3E%3Crect x='12' y='13' width='4' height='6' rx='1' fill='%2322B847'/%3E%3Crect x='18' y='13' width='4' height='6' rx='1' fill='%23AEB6B5'/%3E%3Crect x='24' y='13' width='4' height='6' rx='1' fill='%23AEB6B5'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --shell: #E9ECEA;
+    --panel: #F7F8F6;
+    --cap: #DCE0DE;
+    --ink: #23292C;
+    --ink-2: #5E686C;
+    --seam: #CDD3D2;
+    --led: #22B847;
+    --led-text: #167A31;
+    --led-glow: rgba(34, 184, 71, .55);
+    --led-off: #C4CBCA;
+    --led-off-edge: #AEB6B5;
+    --warn: #A9471A;
+    --focus: #1F6FD1;
+    --font: "Barlow", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-c: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --shell: #15191B;
+      --panel: #1D2326;
+      --cap: #262D30;
+      --ink: #E7EBEA;
+      --ink-2: #9BA6AA;
+      --seam: #2E373B;
+      --led: #3BD764;
+      --led-text: #5FE283;
+      --led-glow: rgba(59, 215, 100, .5);
+      --led-off: #353E42;
+      --led-off-edge: #444F54;
+      --warn: #F08A55;
+      --focus: #6AA8FF;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--shell); color: var(--ink); font: 400 17px/1.45 var(--font); }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  [hidden] { display: none !important; }
+
+  .app { max-width: 34rem; margin: 0 auto; padding: max(18px, env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom)); }
+  .top { margin: 4px 2px 16px; }
+  h1 { font: 700 2.3rem/1 var(--font-c); letter-spacing: -.005em; margin: 0 0 6px; }
+  .sub { margin: 0; color: var(--ink-2); max-width: 30em; }
+
+  /* Camera panel */
+  .view { background: var(--panel); border: 1px solid var(--seam); border-radius: 18px; overflow: hidden; }
+  .view.live { background: #000; border-color: transparent; }
+  .intro { padding: 22px 18px 18px; }
+  .intro-err { margin: 12px 0 0; color: var(--warn); font-weight: 500; }
+  .cam { position: relative; margin: 0 auto; background: #000; }
+  .cam video, .cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .cam video { object-fit: fill; }
+  .cam canvas.drawing { touch-action: none; cursor: crosshair; }
+  .cam-hint { position: absolute; left: 10px; right: 10px; top: 10px; margin: 0; padding: 8px 12px; border-radius: 10px; background: rgba(12, 16, 18, .74); color: #fff; font-weight: 600; text-align: center; pointer-events: none; }
+
+  /* The hub, drawn: three battery tops over a face with three rows of four lights */
+  .hub { max-width: 320px; margin: 2px auto 0; }
+  .hub-tops { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 14px; }
+  .hub-tops span { height: 34px; border: 1px solid var(--seam); border-bottom: 0; border-radius: 10px 10px 3px 3px; background: var(--cap); }
+  .hub-face { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 30px 12px 14px; border: 1px solid var(--seam); border-radius: 14px; background: var(--shell); }
+  .grp { display: flex; justify-content: center; gap: 6px; }
+
+  .pip { display: block; flex: none; width: 10px; height: 10px; border-radius: 2px; background: var(--led-off); box-shadow: inset 0 0 0 1px var(--led-off-edge); }
+  .pip.on, .pip.blink { background: var(--led); box-shadow: 0 0 10px 1px var(--led-glow); }
+  .pip.blink { animation: blink 1.1s steps(1, end) infinite; }
+  @keyframes blink { 50% { background: var(--led-off); box-shadow: inset 0 0 0 1px var(--led-off-edge); } }
+
+  .steps { margin: 20px 0; padding: 0; list-style: none; counter-reset: step; display: grid; gap: 10px; }
+  .steps li { counter-increment: step; display: grid; grid-template-columns: 1.5rem 1fr; gap: 6px; align-items: baseline; }
+  .steps li::before { content: counter(step); font: 700 1.3rem/1 var(--font-c); color: var(--led-text); }
+
+  /* Buttons */
+  .btn { appearance: none; border: 1px solid var(--seam); background: var(--panel); color: var(--ink); border-radius: 11px; min-height: 44px; padding: 9px 16px; font-weight: 600; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--shell); }
+  .btn.big { width: 100%; min-height: 54px; font-size: 1.12rem; }
+
+  .status { margin: 14px 2px 2px; min-height: 1.45em; font-weight: 500; }
+  .status.warn { color: var(--warn); }
+  .note { margin: 2px 2px 0; color: var(--ink-2); font-size: .93rem; }
+
+  /* Live readings: one row per battery, separated by seams like the hub's panel lines */
+  .readings { margin: 12px 0 0; border-top: 1px solid var(--seam); }
+  .bat { display: grid; grid-template-columns: minmax(5.2rem, 1fr) auto minmax(7rem, auto); align-items: center; gap: 14px; padding: 13px 4px; border-bottom: 1px solid var(--seam); }
+  .bat-name { font-weight: 600; }
+  .bat .pips { display: flex; gap: 7px; }
+  .bat .pip { width: 17px; height: 17px; border-radius: 3px; }
+  .bat-state { text-align: right; color: var(--ink-2); font-size: .96rem; }
+  .bat.ok .bat-state { color: var(--led-text); font-weight: 600; }
+  .bat.ringing { background: var(--led-glow); }
+  .bat.ringing .bat-state { color: var(--ink); font-weight: 700; }
+
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; }
+  .tools .btn { flex: 1 1 auto; }
+  .zoom { flex: 1 1 100%; display: flex; align-items: center; gap: 12px; padding: 4px 4px 0; color: var(--ink-2); }
+  .zoom input { flex: 1; }
+  input[type=range] { accent-color: var(--led); }
+
+  /* Settings */
+  .settings { margin-top: 30px; }
+  .settings h2 { font: 700 1.5rem/1.1 var(--font-c); margin: 0 2px 4px; }
+  .field { display: grid; gap: 10px; padding: 15px 2px; border-bottom: 1px solid var(--seam); }
+  .field-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .label { font-weight: 600; }
+  .help { margin: 0; color: var(--ink-2); font-size: .93rem; }
+
+  .picker { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .picker-pips { display: inline-flex; gap: 9px; padding: 11px 13px; border: 1px solid var(--seam); border-radius: 13px; background: var(--shell); }
+  .picker-pips button { appearance: none; border: 0; padding: 0; width: 40px; height: 40px; border-radius: 7px; background: var(--led-off); box-shadow: inset 0 0 0 1px var(--led-off-edge); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .picker-pips button.on { background: var(--led); box-shadow: 0 0 14px 1px var(--led-glow); }
+  .picker-value { font: 700 2.3rem/1 var(--font-c); }
+  .picker-value small { margin-left: 5px; font: 500 1.05rem var(--font); color: var(--ink-2); }
+
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--seam); border-radius: 12px; background: var(--shell); justify-self: start; }
+  .seg button { appearance: none; border: 0; background: transparent; border-radius: 9px; min-height: 40px; min-width: 44px; padding: 8px 14px; color: var(--ink-2); cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--seam); }
+
+  details.more { border-bottom: 1px solid var(--seam); }
+  details.more > summary { display: flex; justify-content: space-between; align-items: center; padding: 15px 2px; font-weight: 600; cursor: pointer; list-style: none; }
+  details.more > summary::-webkit-details-marker { display: none; }
+  details.more > summary::after { content: "+"; font: 600 1.5rem/1 var(--font-c); color: var(--ink-2); }
+  details.more[open] > summary::after { content: "\2212"; }
+  details.more .field:last-child { border-bottom: 0; }
+
+  .switch { position: relative; flex: none; width: 52px; height: 32px; }
+  .switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+  .switch span { position: absolute; inset: 0; border-radius: 99px; background: var(--led-off); box-shadow: inset 0 0 0 1px var(--led-off-edge); pointer-events: none; transition: background .15s; }
+  .switch span::after { content: ""; position: absolute; top: 3px; left: 3px; width: 26px; height: 26px; border-radius: 50%; background: var(--panel); box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: transform .15s; }
+  .switch input:checked + span { background: var(--led); }
+  .switch input:checked + span::after { transform: translateX(20px); }
+  .switch input:focus-visible + span { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  .foot { margin: 24px 2px 0; color: var(--ink-2); font-size: .93rem; }
+
+  /* Alarm: the whole screen pulses LED green */
+  .alarm { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 24px; background: #2BC650; color: #08200F; animation: flash 1s steps(1, end) infinite; }
+  @keyframes flash { 50% { background: #0C1A11; color: #E6FBEC; } }
+  .alarm-inner { width: min(26rem, 100%); display: grid; gap: 24px; justify-items: center; text-align: center; }
+  .alarm h2 { margin: 0; font: 700 clamp(2.3rem, 10vw, 3.5rem)/1.02 var(--font-c); }
+  .alarm .pips { display: flex; gap: 10px; }
+  .alarm .pip { width: 28px; height: 28px; border-radius: 5px; background: rgba(0, 0, 0, .22); box-shadow: none; }
+  .alarm .pip.on { background: #fff; box-shadow: 0 0 16px rgba(255, 255, 255, .8); }
+  .alarm .btn { width: 100%; min-height: 62px; background: #fff; border-color: #fff; color: #0C1A11; font-size: 1.25rem; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pip.blink { animation: none; opacity: .55; }
+    .alarm { animation: none; }
+  }
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="top">
+    <h1>Charge alarm</h1>
+    <p class="sub">Point your phone at a DJI charging hub. It rings when a battery reaches the number of lights you pick.</p>
+  </header>
+
+  <section class="view" id="view" aria-label="Camera">
+    <div class="intro" id="intro">
+      <div class="hub" aria-hidden="true">
+        <div class="hub-tops"><span></span><span></span><span></span></div>
+        <div class="hub-face">
+          <span class="grp"><i class="pip on"></i><i class="pip on"></i><i class="pip blink"></i><i class="pip"></i></span>
+          <span class="grp"><i class="pip on"></i><i class="pip on"></i><i class="pip on"></i><i class="pip on"></i></span>
+          <span class="grp"><i class="pip on"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></span>
+        </div>
+      </div>
+      <ol class="steps">
+        <li>Prop your phone so the camera looks straight at the hub's lights, close up.</li>
+        <li>Tap Start and allow the camera.</li>
+        <li>Leave this page open. It rings when a battery gets to your level.</li>
+      </ol>
+      <button class="btn primary big" id="startBtn" type="button">Start</button>
+      <p class="intro-err" id="introErr" role="alert" hidden></p>
+    </div>
+    <div class="cam" id="cam" hidden>
+      <video id="video" playsinline muted autoplay></video>
+      <canvas id="overlay" aria-hidden="true"></canvas>
+      <p class="cam-hint" id="camHint" hidden>Drag across all the battery lights</p>
+    </div>
+  </section>
+
+  <p class="status" id="status" role="status" aria-live="polite"></p>
+  <p class="note" id="note" hidden></p>
+
+  <section class="readings" id="readings" aria-label="Batteries" hidden></section>
+
+  <div class="tools" id="tools" hidden>
+    <button class="btn" id="findBtn" type="button">Find lights</button>
+    <button class="btn" id="drawBtn" type="button">Draw box</button>
+    <button class="btn" id="flipBtn" type="button" hidden>Switch camera</button>
+    <button class="btn" id="stopBtn" type="button">Stop</button>
+    <label class="zoom" id="zoomWrap" hidden><span>Zoom</span><input type="range" id="zoom" min="1" max="2" step="0.1" value="1"></label>
+  </div>
+
+  <section class="settings" aria-labelledby="setTitle">
+    <h2 id="setTitle">Settings</h2>
+
+    <div class="field">
+      <span class="label" id="levelLabel">Ring at</span>
+      <div class="picker">
+        <div class="picker-pips" id="levelPicker" role="radiogroup" aria-labelledby="levelLabel">
+          <button type="button" role="radio" data-v="1" aria-label="1 light"></button>
+          <button type="button" role="radio" data-v="2" aria-label="2 lights"></button>
+          <button type="button" role="radio" data-v="3" aria-label="3 lights"></button>
+          <button type="button" role="radio" data-v="4" aria-label="4 lights, full"></button>
+        </div>
+        <span class="picker-value" id="levelValue" aria-hidden="true">2<small>lights</small></span>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="field-row">
+        <span class="label" id="countLabel">Batteries in the hub</span>
+        <div class="seg" id="countSeg" role="group" aria-labelledby="countLabel">
+          <button type="button" data-v="1">1</button>
+          <button type="button" data-v="2">2</button>
+          <button type="button" data-v="3">3</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="label" id="modeLabel">Ring for</span>
+      <div class="seg" id="modeSeg" role="group" aria-labelledby="modeLabel">
+        <button type="button" data-v="each">Each battery</button>
+        <button type="button" data-v="all">All batteries</button>
+      </div>
+      <p class="help" id="modeHelp"></p>
+    </div>
+
+    <div class="field">
+      <span class="label" id="soundLabel">Sound</span>
+      <div class="field-row">
+        <div class="seg" id="soundSeg" role="group" aria-labelledby="soundLabel">
+          <button type="button" data-v="beep">Beep</button>
+          <button type="button" data-v="siren">Siren</button>
+          <button type="button" data-v="chime">Chime</button>
+        </div>
+        <button class="btn" id="testBtn" type="button">Test sound</button>
+      </div>
+      <p class="help">Plays at your phone's media volume, even on silent. Turn it up and tap Test sound to check.</p>
+    </div>
+
+    <details class="more">
+      <summary>More settings</summary>
+      <div class="field">
+        <div class="field-row">
+          <label class="label" for="blinkToggle">Count a blinking light</label>
+          <span class="switch"><input type="checkbox" id="blinkToggle"><span></span></span>
+        </div>
+        <p class="help">Off: a light counts once it stops blinking and stays on. On: it counts as soon as it starts blinking.</p>
+      </div>
+      <div class="field">
+        <span class="label" id="sensLabel">Light detection</span>
+        <div class="seg" id="sensSeg" role="group" aria-labelledby="sensLabel">
+          <button type="button" data-v="low">Strict</button>
+          <button type="button" data-v="normal">Normal</button>
+          <button type="button" data-v="high">Sensitive</button>
+        </div>
+        <p class="help">Pick Sensitive if it misses lights that are on. Pick Strict if it sees lights that are off.</p>
+      </div>
+      <div class="field">
+        <label class="label" for="volume">Volume</label>
+        <input type="range" id="volume" min="0.1" max="1" step="0.05" value="0.9">
+      </div>
+    </details>
+  </section>
+
+  <p class="foot">Works best 15 to 30 cm from the hub, facing the lights. Keep the screen on and this page open. The camera picture stays on your phone.</p>
+</main>
+
+<div class="alarm" id="alarm" role="alertdialog" aria-modal="true" aria-labelledby="alarmTitle" hidden>
+  <div class="alarm-inner">
+    <div class="pips" id="alarmPips" aria-hidden="true"></div>
+    <h2 id="alarmTitle"></h2>
+    <button class="btn" id="silenceBtn" type="button">Stop alarm</button>
+  </div>
+</div>
+
+<script>
+/* CORE START: light finding and counting. No DOM in here so it can be tested on its own. */
+const Core = (() => {
+  'use strict';
+
+  // How much a pixel looks like a lit green LED: green beating red (and most of blue),
+  // scaled down when dim so dark green objects score low.
+  function ledScore(r, g, b) {
+    const b6 = 0.6 * b;
+    const v = g - (r > b6 ? r : b6);
+    if (v <= 0) return 0;
+    return g >= 160 ? v : v * g / 160;
+  }
+
+  // Phone cameras often wash a bright LED out to nearly white, with the green only in a
+  // ring around it. So a bright spot also counts, by how much it outshines its
+  // surroundings, as long as there is clear green right next to it.
+  const GREEN_NEAR = 22;
+
+  // Typical brightness (median luma) of a strip, sampling every 4th pixel.
+  function lumaMedian(data) {
+    const hist = new Uint32Array(256);
+    let n = 0;
+    for (let p = 0; p < data.length; p += 16) { hist[(data[p] + 2 * data[p + 1] + data[p + 2]) >> 2]++; n++; }
+    let acc = 0;
+    for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= n / 2) return v; }
+    return 255;
+  }
+
+  // Largest value within k positions either side.
+  function spread(arr, k) {
+    const L = arr.length, out = new Float32Array(L);
+    for (let i = 0; i < L; i++) {
+      let m = 0;
+      const j1 = i + k < L ? i + k : L - 1;
+      for (let j = i - k > 0 ? i - k : 0; j <= j1; j++) if (arr[j] > m) m = arr[j];
+      out[i] = m;
+    }
+    return out;
+  }
+
+  // One number per position along the strip: the strongest LED evidence across it.
+  function profile(data, w, h, horizontal) {
+    const L = horizontal ? w : h, C = horizontal ? h : w;
+    const bg = lumaMedian(data) + 20;
+    const pg = new Float32Array(L), pl = new Float32Array(L);
+    const stepC = horizontal ? w * 4 : 4, stepA = horizontal ? 4 : w * 4;
+    for (let a = 0; a < L; a++) {
+      let bestG = 0, bestL = 0;
+      // Neighbouring pixels across the strip are averaged in pairs to calm camera noise.
+      for (let c = C === 1 ? 0 : 1; c < C; c++) {
+        const p = a * stepA + c * stepC, q = C === 1 ? p : p - stepC;
+        const r = (data[p] + data[q]) * 0.5, g = (data[p + 1] + data[q + 1]) * 0.5, b = (data[p + 2] + data[q + 2]) * 0.5;
+        const s = ledScore(r, g, b);
+        if (s > bestG) bestG = s;
+        const l = (r + 2 * g + b) * 0.25 - bg;
+        if (l > bestL) bestL = l;
+      }
+      pg[a] = bestG;
+      pl[a] = bestL;
+    }
+    const near = spread(pg, Math.max(3, Math.round(L / 60)));
+    const raw = new Float32Array(L);
+    for (let a = 0; a < L; a++) raw[a] = near[a] >= GREEN_NEAR && pl[a] > pg[a] ? pl[a] : pg[a];
+    return smooth(raw);
+  }
+
+  function smooth(raw) {
+    const L = raw.length, out = new Float32Array(L);
+    for (let i = 0; i < L; i++) {
+      const l = raw[i > 0 ? i - 1 : i], r = raw[i < L - 1 ? i + 1 : i];
+      out[i] = (l + 2 * raw[i] + r) * 0.25;
+    }
+    return out;
+  }
+
+  function percentile(arr, q) {
+    const s = Float32Array.from(arr).sort();
+    return s[Math.min(s.length - 1, Math.max(0, Math.floor(q * (s.length - 1))))];
+  }
+
+  // Local maxima above thr. Neighbours with only a shallow dip between them are one light.
+  function findPeaks(M, thr, floor) {
+    const L = M.length, cands = [];
+    let i = 0;
+    while (i < L) {
+      if (M[i] < thr) { i++; continue; }
+      let j = i;
+      while (j + 1 < L && M[j + 1] === M[i]) j++;
+      const leftLower = i === 0 || M[i - 1] < M[i];
+      const rightLower = j === L - 1 || M[j + 1] < M[j];
+      if (leftLower && rightLower) cands.push({ i: (i + j) >> 1, v: M[i] });
+      i = j + 1;
+    }
+    const peaks = [];
+    for (const c of cands) {
+      const prev = peaks[peaks.length - 1];
+      if (!prev) { peaks.push(c); continue; }
+      let valley = Infinity;
+      for (let k = prev.i; k <= c.i; k++) if (M[k] < valley) valley = M[k];
+      const lower = Math.min(prev.v, c.v);
+      if (valley - floor > 0.75 * (lower - floor)) {
+        if (c.v > prev.v) peaks[peaks.length - 1] = c;
+      } else peaks.push(c);
+    }
+    return peaks;
+  }
+
+  const MIN_CONTRAST = 18;
+
+  // frames: profiles from the last few seconds, oldest first.
+  // zones: battery boundaries along the strip, from 0 to 1.
+  // Returns every light found (solid or blinking) and a count per battery.
+  function analyze(frames, zones, sens) {
+    const n = frames.length, L = frames[0].length, K = zones.length - 1;
+    const M = new Float32Array(L);
+    for (let f = 0; f < n; f++) {
+      const p = frames[f];
+      for (let i = 0; i < L; i++) if (p[i] > M[i]) M[i] = p[i];
+    }
+    const floor = percentile(M, 0.15);
+    let top = 0;
+    for (let i = 0; i < L; i++) if (M[i] > top) top = M[i];
+    const contrast = top - floor;
+    const res = { L, floor, top, contrast, hi: 0, lo: 0, peaks: [], zones: [] };
+    if (contrast >= MIN_CONTRAST) {
+      const hi = floor + Math.max(MIN_CONTRAST * 0.6, sens * contrast);
+      const lo = floor + 0.6 * (hi - floor);
+      res.hi = hi; res.lo = lo;
+      for (const pk of findPeaks(M, hi, floor)) {
+        let on = false, onCount = 0, offRuns = 0, prevOn = true;
+        const i = pk.i, a = i > 0 ? i - 1 : i, b = i < L - 1 ? i + 1 : i;
+        for (let f = 0; f < n; f++) {
+          const p = frames[f];
+          const v = Math.max(p[a], p[i], p[b]);
+          on = on ? v >= lo : v >= hi;
+          if (on) onCount++;
+          else if (prevOn) offRuns++;
+          prevOn = on;
+        }
+        pk.frac = onCount / n;
+        pk.offRuns = offRuns;
+        pk.state = pk.frac < 0.08 ? 'none' : (pk.frac >= 0.85 && offRuns <= 1 ? 'solid' : 'blink');
+        pk.u = (i + 0.5) / L;
+        res.peaks.push(pk);
+      }
+    }
+    for (let z = 0; z < K; z++) {
+      let lit = 0, solid = 0;
+      for (const pk of res.peaks) {
+        if (pk.state === 'none' || pk.u < zones[z] || pk.u >= zones[z + 1]) continue;
+        lit++;
+        if (pk.state === 'solid') solid++;
+      }
+      res.zones.push({ lit, solid, blink: lit - solid });
+    }
+    return res;
+  }
+
+  // Battery level in lights. A blinking light is the bar still charging, so it only
+  // counts when countBlink is on. -1 means no lights, -2 means too many to be one battery.
+  function levelOf(z, countBlink) {
+    if (!z || z.lit === 0) return -1;
+    if (z.lit > 4) return -2;
+    if (countBlink) return z.lit;
+    return z.blink > 0 ? z.lit - 1 : z.lit;
+  }
+
+  function equalZones(K) {
+    const z = [];
+    for (let k = 0; k <= K; k++) z.push(k / K);
+    return z;
+  }
+
+  // ---- Finding the lights in the whole picture ----
+
+  // While searching, keeps for each pixel its strongest green score (acc.g) and the most
+  // it has outshone the area around it (acc.l; a box about 6% of the picture across).
+  // Uses 2x2 averages so a single noisy pixel can't pass for a light.
+  let sat = null;
+  function accumulate(data, acc, w, h) {
+    const W1 = w + 1;
+    if (!sat || sat.length !== W1 * (h + 1)) sat = new Float64Array(W1 * (h + 1));
+    for (let y = 0; y < h; y++) {
+      let run = 0;
+      for (let x = 0; x < w; x++) {
+        const p = (y * w + x) * 4;
+        run += data[p] + 2 * data[p + 1] + data[p + 2];
+        sat[(y + 1) * W1 + x + 1] = sat[y * W1 + x + 1] + run;
+      }
+    }
+    const R = Math.max(4, Math.round(0.03 * Math.max(w, h)));
+    for (let y = 0; y < h; y++) {
+      const r0 = y * w, r1 = (y + 1 < h ? y + 1 : y) * w;
+      const ya = y - R < 0 ? 0 : y - R, yb = y + R + 1 > h ? h : y + R + 1;
+      for (let x = 0; x < w; x++) {
+        const xa = x - R < 0 ? 0 : x - R, xb = x + R + 1 > w ? w : x + R + 1;
+        const bg = (sat[yb * W1 + xb] - sat[ya * W1 + xb] - sat[yb * W1 + xa] + sat[ya * W1 + xa]) / ((yb - ya) * (xb - xa) * 4);
+        const x2 = x + 1 < w ? x + 1 : x;
+        const a = (r0 + x) * 4, b = (r0 + x2) * 4, c = (r1 + x) * 4, d = (r1 + x2) * 4;
+        const cr = (data[a] + data[b] + data[c] + data[d]) * 0.25;
+        const cg = (data[a + 1] + data[b + 1] + data[c + 1] + data[d + 1]) * 0.25;
+        const cb = (data[a + 2] + data[b + 2] + data[c + 2] + data[d + 2]) * 0.25;
+        const i = r0 + x, s = ledScore(cr, cg, cb), l = (cr + 2 * cg + cb) * 0.25 - bg - 20;
+        if (s > acc.g[i]) acc.g[i] = s;
+        if (l > acc.l[i]) acc.l[i] = l;
+      }
+    }
+  }
+
+  // One map to search: the green score, or the brightness score where green is close by.
+  function combine(acc, w, h) {
+    const k = Math.max(3, Math.round(0.012 * Math.max(w, h)));
+    const tmp = new Float32Array(w * h), out = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) tmp.set(spread(acc.g.subarray(y * w, (y + 1) * w), k), y * w);
+    const col = new Float32Array(h);
+    for (let x = 0; x < w; x++) {
+      for (let y = 0; y < h; y++) col[y] = tmp[y * w + x];
+      const near = spread(col, k);
+      for (let y = 0; y < h; y++) {
+        const i = y * w + x;
+        out[i] = near[y] >= GREEN_NEAR && acc.l[i] > acc.g[i] ? acc.l[i] : acc.g[i];
+      }
+    }
+    return out;
+  }
+
+  function blobs(img, w, h, thr) {
+    const lab = new Uint8Array(w * h), out = [], stack = [];
+    for (let s = 0; s < w * h; s++) {
+      if (lab[s] || img[s] < thr) continue;
+      let cnt = 0, sx = 0, sy = 0, sw = 0, peak = 0, x0 = w, y0 = h, x1 = 0, y1 = 0;
+      lab[s] = 1; stack.push(s);
+      while (stack.length) {
+        const q = stack.pop(), x = q % w, y = (q / w) | 0, v = img[q];
+        cnt++; sx += x * v; sy += y * v; sw += v;
+        if (v > peak) peak = v;
+        if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+        for (let dy = -1; dy <= 1; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx;
+            if (nx < 0 || nx >= w) continue;
+            const nq = ny * w + nx;
+            if (!lab[nq] && img[nq] >= thr) { lab[nq] = 1; stack.push(nq); }
+          }
+        }
+      }
+      out.push({ x: sx / sw, y: sy / sw, n: cnt, peak, x0, y0, x1, y1 });
+    }
+    return out;
+  }
+
+  // The lights sit in a straight row. Find the line through the most of them.
+  // Rows are assumed to run across the picture unless a down-the-picture row is clearly better.
+  function fitRow(bl, w, h) {
+    let maxPeak = 0;
+    for (const b of bl) if (b.peak > maxPeak) maxPeak = b.peak;
+    // Bright, solid spots count most; faint specks and reflections count little.
+    const weight = b => { const r = b.peak / maxPeak; return r * r * Math.min(1, b.n / 6); };
+    const best = {};
+    for (const horiz of [true, false]) {
+      const U = b => (horiz ? b.x : b.y), V = b => (horiz ? b.y : b.x);
+      const cs = bl.map(b => (horiz ? b.y1 - b.y0 : b.x1 - b.x0) + 1).sort((a, b) => a - b);
+      const tol = Math.max(1.5 * cs[cs.length >> 1], 0.015 * (horiz ? h : w), 3);
+      let top = null;
+      const tryLine = (s, c) => {
+        const k = Math.sqrt(1 + s * s);
+        let n = 0, str = 0;
+        const inl = [];
+        for (const b of bl) {
+          if (Math.abs(V(b) - (s * U(b) + c)) / k <= tol) { n++; str += weight(b); inl.push(b); }
+        }
+        if (!top || str > top.str + 1e-9 || (Math.abs(str - top.str) <= 1e-9 && n > top.n)) top = { n, str, s, c, inl, tol, horiz };
+      };
+      for (let i = 0; i < bl.length; i++) {
+        tryLine(0, V(bl[i]));
+        for (let j = i + 1; j < bl.length; j++) {
+          const du = U(bl[j]) - U(bl[i]);
+          if (Math.abs(du) < 1) continue;
+          const s = (V(bl[j]) - V(bl[i])) / du;
+          if (Math.abs(s) > 0.45) continue;
+          tryLine(s, V(bl[i]) - s * U(bl[i]));
+        }
+      }
+      // Straighten the line through its lights.
+      if (top && top.inl.length >= 2) {
+        let mu = 0, mv = 0;
+        for (const b of top.inl) { mu += U(b); mv += V(b); }
+        mu /= top.inl.length; mv /= top.inl.length;
+        let suv = 0, suu = 0;
+        for (const b of top.inl) { suv += (U(b) - mu) * (V(b) - mv); suu += (U(b) - mu) * (U(b) - mu); }
+        if (suu > 1) {
+          const s = Math.max(-0.45, Math.min(0.45, suv / suu));
+          top.s = s; top.c = mv - s * mu;
+        }
+      }
+      best[horiz ? 'h' : 'v'] = top;
+    }
+    if (best.v && best.v.n >= 4 && best.v.str > 1.5 * best.h.str) return best.v;
+    return best.h;
+  }
+
+  function lineProfile(img, w, h, row, u0, u1, half) {
+    const n = Math.max(1, Math.round(u1 - u0)), raw = new Float32Array(n);
+    for (let k = 0; k < n; k++) {
+      const u = u0 + k + 0.5, vc = row.s * u + row.c;
+      let best = 0;
+      for (let dv = -half; dv <= half; dv++) {
+        const v = Math.round(vc + dv), uu = Math.floor(u);
+        const x = row.horiz ? uu : v, y = row.horiz ? v : uu;
+        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+        const val = img[y * w + x];
+        if (val > best) best = val;
+      }
+      raw[k] = best;
+    }
+    return smooth(raw);
+  }
+
+  // Splits light positions into K batteries at the K-1 widest gaps, but only when those
+  // gaps are clearly wider than the gaps between lights of the same battery (and wider
+  // than minGap), and the batteries come out evenly spaced like the hub's slots.
+  function groupPositions(pos, K, minGap) {
+    const n = pos.length;
+    if (!n) return { ok: false, reason: 'none' };
+    if (K === 1) return n <= 4 ? { ok: true, groups: [pos.slice()] } : { ok: false, reason: 'many' };
+    if (n < K) return { ok: false, reason: 'few' };
+    const gaps = [];
+    for (let i = 0; i < n - 1; i++) gaps.push({ i, g: pos[i + 1] - pos[i] });
+    const wide = gaps.slice().sort((a, b) => b.g - a.g);
+    const cuts = wide.slice(0, K - 1);
+    const rest = wide.slice(K - 1).map(o => o.g);
+    const minCut = Math.min(...cuts.map(o => o.g));
+    if (rest.length && minCut < 1.8 * Math.max(...rest)) return { ok: false, reason: n > 4 * K ? 'many' : 'unclear' };
+    if (minGap && minCut < minGap) return { ok: false, reason: 'unclear' };
+    const at = cuts.map(o => o.i).sort((a, b) => a - b);
+    const groups = [];
+    let start = 0;
+    for (const c of at) { groups.push(pos.slice(start, c + 1)); start = c + 1; }
+    groups.push(pos.slice(start));
+    if (groups.some(g => g.length > 4)) return { ok: false, reason: 'many' };
+    if (K >= 3) {
+      // First lights (or last lights, if they fill the other way) sit one slot apart.
+      const even = arr => {
+        const d = [];
+        for (let i = 1; i < arr.length; i++) d.push(arr[i] - arr[i - 1]);
+        return Math.max(...d) <= 1.35 * Math.min(...d);
+      };
+      if (!even(groups.map(g => g[0])) && !even(groups.map(g => g[g.length - 1]))) return { ok: false, reason: 'unclear' };
+    }
+    return { ok: true, groups };
+  }
+
+  // Box ends and battery boundaries from the groups. Lights that are off now can sit on
+  // either side of the lit ones, so each battery gets a zone about one battery wide.
+  function stripFromGroups(groups, K, ledSize) {
+    if (K === 1) {
+      const g = groups[0], span = g[g.length - 1] - g[0];
+      const pitch = g.length > 1 ? span / (g.length - 1) : Math.max(4, ledSize * 2.2);
+      const A = g[0] - 3.6 * pitch, B = g[g.length - 1] + 3.6 * pitch;
+      return { A, B, bounds: [A, B] };
+    }
+    const b = [];
+    for (let k = 0; k < K - 1; k++) b.push((groups[k][groups[k].length - 1] + groups[k + 1][0]) / 2);
+    let wz;
+    if (K >= 3) {
+      const ws = [];
+      for (let k = 0; k < b.length - 1; k++) ws.push(b[k + 1] - b[k]);
+      ws.sort((x, y) => x - y);
+      wz = ws[ws.length >> 1];
+    } else {
+      const g0 = groups[0], g1 = groups[1];
+      wz = Math.max(g1[0] - g0[0], g1[g1.length - 1] - g0[g0.length - 1]);
+    }
+    const A = b[0] - 1.2 * wz, B = b[b.length - 1] + 1.2 * wz;
+    return { A, B, bounds: [A, ...b, B] };
+  }
+
+  // img: brightest LED score per pixel over a couple of seconds (w x h).
+  // Returns a box around the row of lights (0..1 of the picture) and the battery zones.
+  function autoFind(img, w, h, K) {
+    let peak = 0;
+    for (let i = 0; i < img.length; i++) if (img[i] > peak) peak = img[i];
+    if (peak < 24) return { ok: false, reason: 'none' };
+    let bl = blobs(img, w, h, Math.max(18, 0.3 * peak)).filter(b => b.n >= 2 && b.n <= w * h * 0.01);
+    if (!bl.length) return { ok: false, reason: 'none' };
+    bl.sort((a, b) => b.peak - a.peak);
+    bl = bl.slice(0, 40);
+    const row = fitRow(bl, w, h);
+    if (!row || !row.inl.length) return { ok: false, reason: 'none' };
+    let u0 = Infinity, u1 = -Infinity;
+    for (const b of row.inl) {
+      const a0 = row.horiz ? b.x0 : b.y0, a1 = row.horiz ? b.x1 : b.y1;
+      if (a0 < u0) u0 = a0;
+      if (a1 > u1) u1 = a1;
+    }
+    // Light size measured across the row, where neighbouring glows don't merge.
+    const cross = row.inl.map(b => (row.horiz ? b.y1 - b.y0 : b.x1 - b.x0) + 1).sort((a, b) => a - b);
+    const ledSize = cross[cross.length >> 1];
+    const half = Math.max(2, Math.round(ledSize));
+    const lim = row.horiz ? w : h, other = row.horiz ? h : w;
+    const A0 = Math.max(0, Math.floor(u0 - half)), A1 = Math.min(lim, Math.ceil(u1 + half + 1));
+    const prof = lineProfile(img, w, h, row, A0, A1, half);
+    const floor = percentile(prof, 0.15);
+    let top = 0;
+    for (let i = 0; i < prof.length; i++) if (prof[i] > top) top = prof[i];
+    if (top - floor < MIN_CONTRAST) return { ok: false, reason: 'none' };
+    const pos = findPeaks(prof, floor + 0.3 * (top - floor), floor).map(p => A0 + p.i + 0.5);
+    // Batteries are much further apart than lights within a battery.
+    const minGap = 2.6 * ledSize;
+    const grp = groupPositions(pos, K, minGap);
+    if (!grp.ok) {
+      // If the lights make sense for one battery fewer or more, the count setting is likely off.
+      if (K > 1 && groupPositions(pos, K - 1, minGap).ok) return { ok: false, reason: 'few' };
+      if (K < 3 && groupPositions(pos, K + 1, minGap).ok) return { ok: false, reason: 'many' };
+      return grp;
+    }
+    const lay = stripFromGroups(grp.groups, K, ledSize);
+    const A = Math.max(0, lay.A), B = Math.min(lim, lay.B);
+    if (B - A < 4) return { ok: false, reason: 'unclear' };
+    const vc = row.s * (A + B) / 2 + row.c;
+    const hh = Math.max(1.6 * ledSize, 0.02 * other) + Math.abs(row.s) * (B - A) / 2;
+    const c0 = Math.max(0, vc - hh), c1 = Math.min(other, vc + hh);
+    const zones = lay.bounds.map(v => Math.min(1, Math.max(0, (v - A) / (B - A))));
+    zones[0] = 0;
+    zones[zones.length - 1] = 1;
+    const strip = row.horiz
+      ? { x0: A / w, x1: B / w, y0: c0 / h, y1: c1 / h }
+      : { x0: c0 / w, x1: c1 / w, y0: A / h, y1: B / h };
+    return { ok: true, strip, zones, horiz: row.horiz, groups: grp.groups.map(g => g.length) };
+  }
+
+  return { ledScore, lumaMedian, spread, profile, lineProfile, percentile, findPeaks, analyze, levelOf, equalZones, accumulate, combine, blobs, fitRow, groupPositions, stripFromGroups, autoFind };
+})();
+/* CORE END */
+</script>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  const els = {
+    view: $('view'), intro: $('intro'), introErr: $('introErr'), startBtn: $('startBtn'),
+    cam: $('cam'), video: $('video'), overlay: $('overlay'), camHint: $('camHint'),
+    status: $('status'), note: $('note'), readings: $('readings'), tools: $('tools'),
+    findBtn: $('findBtn'), drawBtn: $('drawBtn'), flipBtn: $('flipBtn'), stopBtn: $('stopBtn'),
+    zoomWrap: $('zoomWrap'), zoom: $('zoom'),
+    levelPicker: $('levelPicker'), levelValue: $('levelValue'), countSeg: $('countSeg'),
+    modeSeg: $('modeSeg'), modeHelp: $('modeHelp'), soundSeg: $('soundSeg'), testBtn: $('testBtn'),
+    blinkToggle: $('blinkToggle'), sensSeg: $('sensSeg'), volume: $('volume'),
+    alarm: $('alarm'), alarmTitle: $('alarmTitle'), alarmPips: $('alarmPips'), silenceBtn: $('silenceBtn')
+  };
+
+  const WINDOW_MS = 6000;   // how far back blinking is judged
+  const STABLE_MS = 3000;   // a level must hold this long before it counts
+  const REARM_MS = 10000;   // below the level this long (a fresh battery) rings again later
+  const FIND_MS = 2600;     // how long to collect light positions when searching
+  const RETRY_MS = 2500;
+  const TICK_MS = 95;
+  const SENS = { low: 0.5, normal: 0.35, high: 0.22 };
+  const TITLE = document.title;
+
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage off */ } }
+  };
+  const DEFAULTS = { level: 2, count: 3, mode: 'each', sound: 'beep', volume: 0.9, countBlink: false, sens: 'normal' };
+  const settings = Object.assign({}, DEFAULTS, store.get('chargeAlarm.settings', {}));
+  {
+    const ok = (k, list) => { if (!list.includes(settings[k])) settings[k] = DEFAULTS[k]; };
+    ok('level', [1, 2, 3, 4]); ok('count', [1, 2, 3]); ok('mode', ['each', 'all']);
+    ok('sound', ['beep', 'siren', 'chime']); ok('sens', ['low', 'normal', 'high']);
+    if (!(settings.volume >= 0.1 && settings.volume <= 1)) settings.volume = DEFAULTS.volume;
+    settings.countBlink = settings.countBlink === true;
+  }
+  const save = () => store.set('chargeAlarm.settings', settings);
+
+  const S = {
+    running: false, phase: 'idle', stream: null, track: null, cams: [], deviceId: null,
+    strip: null, zones: null, horiz: true, source: null,
+    frames: [], monitorStart: 0, analysis: null,
+    find: null, retryAt: 0, findMsg: '', triedSaved: false,
+    zs: [], allArmed: null, allBelowSince: null, allAlready: false, allDarkSince: 0,
+    alarm: { on: false, zones: new Set(), all: false, vib: 0, title: 0 },
+    drag: null, wake: null, hiddenAt: 0, dpr: 1, vdims: null, rows: [],
+    lastVideoTime: -1, frozenSince: 0, zoomTimer: 0
+  };
+
+  const work = document.createElement('canvas');
+  const wctx = work.getContext('2d', { willReadFrequently: true });
+  const octx = els.overlay.getContext('2d');
+  const lightsWord = n => (n === 1 ? '1 light' : n + ' lights');
+  const clock = t => new Date(t).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  /* ---------- Sound ----------
+     Sounds are made here, saved as small WAV files in memory and played through an
+     <audio> element. Phones play that at media volume even with the ringer on silent
+     (iPhone mutes Web Audio on silent). Web Audio is only the backup. */
+  const Sound = (() => {
+    const SR = 44100;
+    let el = null, ctx = null, src = null, stopTimer = 0, want = false;
+    const urls = new Map(), samples = {};
+    function tone(d, sr, t0, len, f, amp, harm) {
+      const i0 = Math.round(t0 * sr), n = Math.round(len * sr), a = Math.round(0.006 * sr);
+      for (let i = 0; i < n && i0 + i < d.length; i++) {
+        const env = Math.min(1, i / a, (n - i) / a), ph = 2 * Math.PI * f * i / sr;
+        d[i0 + i] += amp * env * (Math.sin(ph) + harm * Math.sin(3 * ph));
+      }
+    }
+    function bell(d, sr, t0, len, f, amp) {
+      const i0 = Math.round(t0 * sr), n = Math.round(len * sr), a = Math.round(0.004 * sr);
+      for (let i = 0; i < n && i0 + i < d.length; i++) {
+        const t = i / sr, env = Math.min(1, i / a) * Math.exp(-t / 0.32);
+        d[i0 + i] += amp * env * (Math.sin(2 * Math.PI * f * t) + 0.25 * Math.sin(4 * Math.PI * f * t));
+      }
+    }
+    function make(name) {
+      const sr = SR;
+      const dur = name === 'siren' ? 1.0 : name === 'chime' ? 1.8 : name === 'chirp' ? 0.26 : 1.25;
+      const d = new Float32Array(Math.round(dur * sr));
+      if (name === 'beep') {
+        for (let k = 0; k < 4; k++) tone(d, sr, k * 0.17, 0.1, 2750, 0.75, 0.3);
+      } else if (name === 'siren') {
+        let ph = 0;
+        for (let i = 0; i < d.length; i++) {
+          const t = i / sr, x = t / dur, f = 650 + 850 * (x < 0.5 ? x * 2 : 2 - x * 2);
+          ph += 2 * Math.PI * f / sr;
+          const edge = Math.min(1, t / 0.01, (dur - t) / 0.01);
+          d[i] = 0.7 * edge * (Math.sin(ph) + 0.18 * Math.sin(3 * ph));
+        }
+      } else if (name === 'chime') {
+        bell(d, sr, 0, 1.4, 1318.5, 0.36);
+        bell(d, sr, 0.16, 1.4, 1661.2, 0.36);
+        bell(d, sr, 0.32, 1.4, 1975.5, 0.36);
+      } else {
+        tone(d, sr, 0, 0.09, 1760, 0.22, 0);
+        tone(d, sr, 0.13, 0.11, 2349, 0.22, 0);
+      }
+      let m = 0;
+      for (let i = 0; i < d.length; i++) m = Math.max(m, Math.abs(d[i]));
+      if (m > 0.92) for (let i = 0; i < d.length; i++) d[i] *= 0.92 / m;
+      return d;
+    }
+    // Volume is baked into the samples, since iPhones ignore an <audio> element's volume.
+    function pcm(name) {
+      const d = samples[name] || (samples[name] = make(name));
+      const v = Math.round(Math.min(1, Math.max(0.05, settings.volume)) * 20) / 20;
+      return { d, v, key: name + '@' + v };
+    }
+    function wavUrl(name) {
+      const { d, v, key } = pcm(name);
+      if (urls.has(key)) return urls.get(key);
+      const n = d.length, buf = new ArrayBuffer(44 + n * 2), dv = new DataView(buf);
+      const str = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+      str(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+      dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+      dv.setUint32(24, SR, true); dv.setUint32(28, SR * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+      str(36, 'data'); dv.setUint32(40, n * 2, true);
+      for (let i = 0; i < n; i++) dv.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, d[i] * v)) * 32767), true);
+      const url = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+      if (urls.size >= 8) { const [k, u] = urls.entries().next().value; URL.revokeObjectURL(u); urls.delete(k); }
+      urls.set(key, url);
+      return url;
+    }
+    function element() {
+      if (!el) { el = new Audio(); el.preload = 'auto'; }
+      return el;
+    }
+    // Backup player.
+    function webAudio(name, loop) {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!ctx) ctx = new AC();
+        if (ctx.state !== 'running') ctx.resume().catch(() => {});
+        if (!name) return;
+        const { d, v } = pcm(name);
+        const b = ctx.createBuffer(1, d.length, SR), ch = b.getChannelData(0);
+        for (let i = 0; i < d.length; i++) ch[i] = d[i] * v;
+        stopWeb();
+        src = ctx.createBufferSource();
+        src.buffer = b; src.loop = !!loop;
+        src.connect(ctx.destination);
+        src.start();
+      } catch (e) { /* no sound available */ }
+    }
+    function stopWeb() {
+      if (!src) return;
+      try { src.stop(); } catch (e) { /* already stopped */ }
+      try { src.disconnect(); } catch (e) { /* ignore */ }
+      src = null;
+    }
+    function play(name, loop) {
+      stop();
+      want = true;
+      const a = element();
+      try {
+        a.loop = !!loop;
+        const u = wavUrl(name);
+        if (a.src !== u) a.src = u;
+        try { a.currentTime = 0; } catch (e) { /* not loaded yet */ }
+        const p = a.play();
+        if (p && p.catch) p.catch(() => { if (want) webAudio(name, loop); });
+      } catch (e) { webAudio(name, loop); }
+    }
+    function stop() {
+      want = false;
+      clearTimeout(stopTimer);
+      if (el) { try { el.pause(); } catch (e) { /* ignore */ } }
+      stopWeb();
+    }
+    return {
+      play, stop,
+      // Call inside a tap: phones only allow sound that a tap started first.
+      unlock() {
+        try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) { /* older Safari */ }
+        webAudio(null);
+      },
+      test(name) { play(name, true); stopTimer = setTimeout(stop, 2600); },
+      chirp() { play('chirp', false); },
+      resume() { if (ctx && ctx.state !== 'running') ctx.resume().catch(() => {}); },
+      state() { return el && !el.paused ? 'playing' : ctx ? ctx.state : 'none'; }
+    };
+  })();
+
+  /* ---------- Settings UI ---------- */
+  function syncControls() {
+    const T = settings.level;
+    [...els.levelPicker.children].forEach(b => {
+      const v = Number(b.dataset.v);
+      b.classList.toggle('on', v <= T);
+      b.setAttribute('aria-checked', String(v === T));
+      b.tabIndex = v === T ? 0 : -1;
+    });
+    els.levelValue.innerHTML = T + '<small>' + (T === 1 ? 'light' : 'lights') + (T === 4 ? ', full' : '') + '</small>';
+    const seg = (el, val) => [...el.querySelectorAll('button')].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === String(val))));
+    seg(els.countSeg, settings.count);
+    seg(els.modeSeg, settings.mode);
+    seg(els.soundSeg, settings.sound);
+    seg(els.sensSeg, settings.sens);
+    els.modeHelp.textContent = settings.mode === 'all'
+      ? 'Rings once, when the last battery gets to ' + lightsWord(T) + '.'
+      : 'Rings each time a battery gets to ' + lightsWord(T) + '.';
+    els.blinkToggle.checked = !!settings.countBlink;
+    els.volume.value = settings.volume;
+  }
+
+  function setLevel(T) {
+    if (T === settings.level) return;
+    settings.level = T;
+    save(); syncControls();
+    if (S.alarm.on) stopAlarm();
+    for (const z of S.zs) {
+      if (z.last != null) { z.armed = z.last < T; z.already = !z.armed; }
+      z.rangAt = null; z.belowSince = null;
+    }
+    S.allArmed = null; S.allAlready = false; S.allBelowSince = null;
+  }
+
+  els.levelPicker.addEventListener('click', e => {
+    const b = e.target.closest('button[data-v]');
+    if (b) setLevel(Number(b.dataset.v));
+  });
+  els.levelPicker.addEventListener('keydown', e => {
+    const d = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowDown' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    setLevel(Math.min(4, Math.max(1, settings.level + d)));
+    els.levelPicker.querySelector('[aria-checked="true"]').focus();
+  });
+
+  function bindSeg(el, key, after) {
+    el.addEventListener('click', e => {
+      const b = e.target.closest('button[data-v]');
+      if (!b) return;
+      const v = key === 'count' ? Number(b.dataset.v) : b.dataset.v;
+      if (settings[key] === v) { if (key === 'sound') { Sound.unlock(); Sound.test(v); } return; }
+      settings[key] = v;
+      save(); syncControls();
+      if (after) after();
+    });
+  }
+  bindSeg(els.countSeg, 'count', () => {
+    buildRows();
+    if (!S.running) return;
+    if (S.strip && S.source !== 'auto') setStrip(S.strip, Core.equalZones(settings.count), S.horiz, S.source);
+    else beginFind();
+  });
+  bindSeg(els.modeSeg, 'mode', () => { S.allArmed = null; S.allAlready = false; S.allBelowSince = null; });
+  bindSeg(els.soundSeg, 'sound', () => { if (!S.alarm.on) { Sound.unlock(); Sound.test(settings.sound); } });
+  bindSeg(els.sensSeg, 'sens', resetZones);
+  els.blinkToggle.addEventListener('change', () => { settings.countBlink = els.blinkToggle.checked; save(); resetZones(); });
+  els.volume.addEventListener('input', () => { settings.volume = Number(els.volume.value); save(); });
+  els.volume.addEventListener('change', () => { if (!S.alarm.on) { Sound.unlock(); Sound.test(settings.sound); } });
+  els.testBtn.addEventListener('click', () => { Sound.unlock(); Sound.test(settings.sound); });
+
+  /* ---------- Battery rows ---------- */
+  function buildRows() {
+    els.readings.textContent = '';
+    S.rows = [];
+    for (let k = 0; k < settings.count; k++) {
+      const row = document.createElement('div');
+      row.className = 'bat';
+      row.innerHTML = '<span class="bat-name">Battery ' + (k + 1) + '</span>' +
+        '<span class="pips" aria-hidden="true"><i class="pip"></i><i class="pip"></i><i class="pip"></i><i class="pip"></i></span>' +
+        '<span class="bat-state"></span>';
+      els.readings.appendChild(row);
+      S.rows.push({ row, pips: [...row.querySelectorAll('.pip')], state: row.querySelector('.bat-state'), key: '' });
+    }
+  }
+
+  function newZone() {
+    return { cand: null, candSince: 0, stable: null, last: null, now: null, reading: null, armed: null, belowSince: null, rangAt: null, already: false };
+  }
+  function resetZones() {
+    S.zs = [];
+    for (let k = 0; k < settings.count; k++) S.zs.push(newZone());
+    S.allArmed = null; S.allAlready = false; S.allBelowSince = null; S.allDarkSince = 0;
+    for (const r of S.rows) r.key = '';
+  }
+
+  function zoneText(z, k, warm) {
+    if (!S.strip || S.phase === 'finding' || S.phase === 'searching') return '';
+    if (!warm) return 'Checking…';
+    if (S.alarm.on && S.alarm.zones.has(k)) return 'Ringing';
+    if (z.now === -2) return 'Too many lights';
+    if (z.rangAt) return 'Rang at ' + clock(z.rangAt);
+    if (z.now === -1 || !z.reading) return 'No lights';
+    if (z.already) return 'Already there';
+    if (z.reading.blink > 0) return 'Charging';
+    if (z.reading.lit >= 4) return 'Full';
+    return 'Waiting';
+  }
+
+  function renderReadings(now) {
+    const warm = S.phase === 'watching' && now - S.monitorStart >= WINDOW_MS;
+    S.rows.forEach((r, k) => {
+      const z = S.zs[k];
+      if (!z) return;
+      const rd = S.strip ? z.reading : null;
+      const solid = rd ? Math.min(4, rd.solid) : 0, lit = rd ? Math.min(4, rd.lit) : 0;
+      const text = zoneText(z, k, warm);
+      const cls = 'bat' + (S.alarm.on && S.alarm.zones.has(k) ? ' ringing' : (z.rangAt || z.already) && warm ? ' ok' : '');
+      const key = solid + '|' + lit + '|' + text + '|' + cls;
+      if (key === r.key) return;
+      r.key = key;
+      r.pips.forEach((p, i) => { p.className = 'pip' + (i < solid ? ' on' : i < lit ? ' blink' : ''); });
+      r.state.textContent = text;
+      r.row.className = cls;
+      r.row.setAttribute('aria-label', 'Battery ' + (k + 1) + (rd ? ': ' + lightsWord(Math.max(0, Core.levelOf(rd, settings.countBlink))) : '') + (text ? ', ' + text : ''));
+    });
+  }
+
+  function renderStatus(now) {
+    const K = settings.count, T = lightsWord(settings.level);
+    let msg = '', warn = false;
+    switch (S.phase) {
+      case 'starting': msg = 'Starting the camera…'; break;
+      case 'finding': msg = 'Looking for the lights…'; break;
+      case 'searching': msg = S.findMsg; warn = true; break;
+      case 'drawing': msg = 'Drag a box across all the battery lights.'; break;
+      case 'watching':
+        if (now - S.monitorStart < WINDOW_MS + STABLE_MS) msg = 'Checking the lights…';
+        else if (S.frozenSince && now - S.frozenSince > 5000) { msg = 'The camera picture stopped. Tap Stop, then Start.'; warn = true; }
+        else if (S.allDarkSince && now - S.allDarkSince > 15000) { msg = "Can't see any lights. Check the camera still sees the hub."; warn = true; }
+        else if (settings.mode === 'all' && K > 1 && S.allAlready) msg = 'All batteries were already at ' + T + ' or more.';
+        else if (settings.mode === 'all' && K > 1) msg = 'Watching. Rings when ' + (K === 2 ? 'both' : 'all ' + K) + ' batteries reach ' + T + '.';
+        else msg = 'Watching. Rings when ' + (K === 1 ? 'the battery' : 'a battery') + ' reaches ' + T + '.';
+        break;
+      default: msg = '';
+    }
+    if (els.status.textContent !== msg) els.status.textContent = msg;
+    els.status.classList.toggle('warn', warn);
+  }
+
+  function showNote(text) { els.note.textContent = text; els.note.hidden = !text; els.note.dataset.kind = ''; }
+
+  /* ---------- Camera ---------- */
+  function cameraError(e) {
+    const n = e && e.name;
+    if (n === 'NotAllowedError' || n === 'SecurityError') return 'Camera access is blocked. Allow the camera for this site in your browser settings, then tap Start.';
+    if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No camera found on this device.';
+    if (n === 'NotReadableError') return 'Another app is using the camera. Close it, then tap Start.';
+    if (n === 'NoMediaDevices') return window.isSecureContext ? "This browser can't use the camera. Try Safari or Chrome." : 'Open this page with https:// so it can use the camera.';
+    return "The camera didn't start. Tap Start to try again.";
+  }
+
+  async function openCamera(deviceId) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      const e = new Error('No camera API'); e.name = 'NoMediaDevices'; throw e;
+    }
+    closeCamera();
+    const size = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+    const video = deviceId ? Object.assign({ deviceId: { exact: deviceId } }, size) : Object.assign({ facingMode: { ideal: 'environment' } }, size);
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video, audio: false });
+    } catch (e) {
+      if (e && (e.name === 'OverconstrainedError' || e.name === 'NotReadableError' || e.name === 'AbortError')) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      } else throw e;
+    }
+    S.stream = stream;
+    S.track = stream.getVideoTracks()[0];
+    S.track.addEventListener('ended', onTrackEnded);
+    const v = els.video;
+    v.muted = true; v.playsInline = true; v.srcObject = stream;
+    try { await v.play(); } catch (e) { /* autoplay attribute covers it */ }
+    await new Promise(res => {
+      if (v.videoWidth) return res();
+      const done = () => { if (v.videoWidth) { v.removeEventListener('loadedmetadata', done); v.removeEventListener('resize', done); res(); } };
+      v.addEventListener('loadedmetadata', done);
+      v.addEventListener('resize', done);
+      setTimeout(res, 4000);
+    });
+    const st = S.track.getSettings ? S.track.getSettings() : {};
+    S.deviceId = st.deviceId || null;
+    setupZoom();
+    listCameras();
+    layout();
+  }
+
+  function closeCamera() {
+    if (S.stream) S.stream.getTracks().forEach(t => { t.removeEventListener('ended', onTrackEnded); t.stop(); });
+    S.stream = null; S.track = null;
+    els.video.srcObject = null;
+  }
+
+  async function onTrackEnded() {
+    if (!S.running) return;
+    try { await openCamera(S.deviceId); restartWatch(); } catch (e) { showNote(cameraError(e)); }
+  }
+
+  async function listCameras() {
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      S.cams = all.filter(d => d.kind === 'videoinput');
+    } catch (e) { S.cams = []; }
+    els.flipBtn.hidden = S.cams.length < 2;
+  }
+
+  function setupZoom() {
+    const t = S.track, caps = t && t.getCapabilities ? t.getCapabilities() : null;
+    if (caps && caps.zoom && caps.zoom.max > caps.zoom.min) {
+      els.zoom.min = caps.zoom.min;
+      els.zoom.max = Math.min(caps.zoom.max, caps.zoom.min * 8);
+      els.zoom.step = caps.zoom.step || 0.1;
+      els.zoom.value = (t.getSettings().zoom) || caps.zoom.min;
+      els.zoomWrap.hidden = false;
+    } else els.zoomWrap.hidden = true;
+  }
+
+  els.zoom.addEventListener('input', () => {
+    if (S.track) S.track.applyConstraints({ advanced: [{ zoom: Number(els.zoom.value) }] }).catch(() => {});
+    clearTimeout(S.zoomTimer);
+    S.zoomTimer = setTimeout(beginFind, 900);
+  });
+
+  els.flipBtn.addEventListener('click', async () => {
+    if (!S.running || S.cams.length < 2) return;
+    const i = S.cams.findIndex(c => c.deviceId === S.deviceId);
+    const next = S.cams[(i + 1) % S.cams.length];
+    try { await openCamera(next.deviceId); beginFind(); } catch (e) { showNote(cameraError(e)); }
+  });
+
+  function layout() {
+    const v = els.video, vw = v.videoWidth, vh = v.videoHeight;
+    if (!vw || !vh || els.cam.hidden) return;
+    const availW = els.view.clientWidth;
+    const maxH = Math.max(220, Math.min(window.innerHeight * 0.56, 700));
+    let w = availW, h = w * vh / vw;
+    if (h > maxH) { h = maxH; w = h * vw / vh; }
+    els.cam.style.width = Math.round(w) + 'px';
+    els.cam.style.height = Math.round(h) + 'px';
+    S.dpr = Math.min(3, window.devicePixelRatio || 1);
+    els.overlay.width = Math.round(w * S.dpr);
+    els.overlay.height = Math.round(h * S.dpr);
+    const changed = S.vdims && (S.vdims[0] !== vw || S.vdims[1] !== vh);
+    S.vdims = [vw, vh];
+    if (changed && S.running && S.phase !== 'starting') beginFind();
+  }
+  window.addEventListener('resize', layout);
+  els.video.addEventListener('resize', layout);
+
+  // Keeps the screen from sleeping (sleeping stops the camera). quiet: don't complain yet.
+  async function keepAwake(quiet) {
+    if (!('wakeLock' in navigator)) { if (!quiet) showNote("This browser can't keep the screen on by itself. Turn off auto-lock while it runs."); return; }
+    try {
+      if (S.wake && !S.wake.released) return;
+      S.wake = await navigator.wakeLock.request('screen');
+      if (els.note.dataset.kind === 'wake') showNote('');
+    } catch (e) {
+      if (!quiet) { showNote("Couldn't keep the screen on. Turn off auto-lock while it runs."); els.note.dataset.kind = 'wake'; }
+    }
+  }
+  // Some browsers only allow it right after a tap, so try again on the next one.
+  document.addEventListener('pointerdown', () => { if (S.running && (!S.wake || S.wake.released)) keepAwake(true); });
+
+  /* ---------- Watching ---------- */
+  function beginFind() {
+    if (!S.running) return;
+    S.find = { img: null, w: 0, h: 0, start: 0 };
+    S.phase = 'finding';
+    S.drag = null;
+    setDrawing(false);
+  }
+
+  function stepFind(now) {
+    const v = els.video, vw = v.videoWidth, vh = v.videoHeight;
+    const sc = Math.min(1, 800 / Math.max(vw, vh));
+    const w = Math.max(1, Math.round(vw * sc)), h = Math.max(1, Math.round(vh * sc));
+    const f = S.find;
+    if (!f.img || f.w !== w || f.h !== h) { f.img = { g: new Float32Array(w * h), l: new Float32Array(w * h) }; f.w = w; f.h = h; f.start = now; }
+    if (work.width !== w || work.height !== h) { work.width = w; work.height = h; }
+    wctx.drawImage(v, 0, 0, w, h);
+    Core.accumulate(wctx.getImageData(0, 0, w, h).data, f.img, w, h);
+    if (now - f.start < FIND_MS) return;
+    S.find = null;
+    const r = Core.autoFind(Core.combine(f.img, w, h), w, h, settings.count);
+    if (r.ok) { setStrip(r.strip, r.zones, r.horiz, 'auto'); return; }
+    const saved = store.get('chargeAlarm.box', null);
+    if (!S.triedSaved && saved && saved.count === settings.count && Math.abs(saved.ar - vw / vh) < 0.02) {
+      S.triedSaved = true;
+      setStrip(saved.strip, saved.zones, saved.horiz, 'saved');
+      showNote("Couldn't find the lights, so it's using your box from last time. Tap Draw box if it's in the wrong place.");
+      return;
+    }
+    const why = {
+      none: "Can't find the lights. Move the phone closer so the hub's lights are in view, or tap Draw box.",
+      few: "Can't see lights for every battery yet. Check Batteries in the hub, or tap Draw box.",
+      many: 'Sees more lights than expected. Check Batteries in the hub, or tap Draw box.',
+      unclear: 'The lights are hard to tell apart. Move closer and hold steady, or tap Draw box.'
+    };
+    S.findMsg = why[r.reason] || why.none;
+    S.phase = 'searching';
+    S.retryAt = now + RETRY_MS;
+  }
+
+  function setStrip(strip, zones, horiz, source) {
+    S.strip = strip; S.zones = zones; S.horiz = horiz; S.source = source;
+    S.frames = []; S.analysis = null; S.find = null;
+    S.monitorStart = performance.now();
+    S.phase = 'watching';
+    S.drag = null;
+    setDrawing(false);
+    resetZones();
+    if (source === 'auto' || source === 'manual') {
+      const v = els.video;
+      store.set('chargeAlarm.box', { strip, zones, horiz, count: settings.count, ar: v.videoWidth / v.videoHeight });
+    }
+  }
+
+  // Same box, fresh readings (for example after the camera restarts).
+  function restartWatch() {
+    if (S.strip) setStrip(S.strip, S.zones, S.horiz, S.source === 'auto' ? 'kept' : S.source);
+    else beginFind();
+  }
+
+  function stepWatch(now) {
+    const v = els.video, vw = v.videoWidth, vh = v.videoHeight, st = S.strip;
+    const sx = st.x0 * vw, sy = st.y0 * vh, sw = (st.x1 - st.x0) * vw, sh = (st.y1 - st.y0) * vh;
+    if (sw < 2 || sh < 2) return;
+    const long = S.horiz ? sw : sh, across = S.horiz ? sh : sw;
+    const k = Math.min(1, 480 / long);
+    const dl = Math.max(8, Math.round(long * k)), dc = Math.min(96, Math.max(1, Math.round(across * k)));
+    const dw = S.horiz ? dl : dc, dh = S.horiz ? dc : dl;
+    if (work.width !== dw || work.height !== dh) { work.width = dw; work.height = dh; }
+    wctx.drawImage(v, sx, sy, sw, sh, 0, 0, dw, dh);
+    const p = Core.profile(wctx.getImageData(0, 0, dw, dh).data, dw, dh, S.horiz);
+    if (S.frames.length && S.frames[0].p.length !== p.length) S.frames = [];
+    S.frames.push({ t: now, p });
+    while (S.frames.length && now - S.frames[0].t > WINDOW_MS) S.frames.shift();
+    const res = Core.analyze(S.frames.map(f => f.p), S.zones, SENS[settings.sens] || SENS.normal);
+    S.analysis = res;
+    const warm = now - S.monitorStart >= WINDOW_MS;
+    let dark = true;
+    res.zones.forEach((r, i) => {
+      const z = S.zs[i];
+      if (!z) return;
+      const lvl = Core.levelOf(r, settings.countBlink);
+      z.reading = r; z.now = lvl;
+      if (lvl !== -1) dark = false;
+      if (!warm) return;
+      if (lvl !== z.cand) { z.cand = lvl; z.candSince = now; }
+      if (now - z.candSince >= STABLE_MS) { z.stable = lvl; if (lvl >= 0) z.last = lvl; }
+    });
+    S.allDarkSince = dark ? (S.allDarkSince || now) : 0;
+    if (warm) evaluate(now);
+  }
+
+  // Decides when to ring. A battery rings once when it climbs to the level; one that was
+  // already there when watching started does not. It can ring again after it has sat
+  // below the level for a while, which is what a freshly inserted battery looks like.
+  function evaluate(now) {
+    const T = settings.level;
+    if (settings.mode === 'each' || settings.count === 1) {
+      const hits = [];
+      S.zs.forEach((z, k) => {
+        if (z.stable == null || z.stable < 0) return;
+        const lvl = z.stable;
+        if (z.armed === null) { z.armed = lvl < T; z.already = !z.armed; return; }
+        if (lvl >= T) {
+          z.belowSince = null;
+          if (z.armed) { z.armed = false; z.already = false; z.rangAt = Date.now(); hits.push(k); }
+        } else if (!z.armed) {
+          if (z.belowSince == null) z.belowSince = now;
+          else if (now - z.belowSince >= REARM_MS) { z.armed = true; z.already = false; z.rangAt = null; z.belowSince = null; }
+        }
+      });
+      if (hits.length) ring(hits, false);
+      return;
+    }
+    if (!S.zs.some(z => z.stable != null)) return;
+    const ready = S.zs.every(z => z.last != null && z.last >= T);
+    if (S.allArmed === null) { S.allArmed = !ready; S.allAlready = ready; return; }
+    if (ready) {
+      S.allBelowSince = null;
+      if (S.allArmed) {
+        S.allArmed = false; S.allAlready = false;
+        const t = Date.now();
+        S.zs.forEach(z => { z.rangAt = t; });
+        ring(S.zs.map((z, k) => k), true);
+      }
+    } else if (!S.allArmed) {
+      if (S.allBelowSince == null) S.allBelowSince = now;
+      else if (now - S.allBelowSince >= REARM_MS) { S.allArmed = true; S.allAlready = false; S.allBelowSince = null; S.zs.forEach(z => { z.rangAt = null; }); }
+    }
+  }
+
+  /* ---------- Alarm ---------- */
+  function alarmText() {
+    const T = lightsWord(settings.level);
+    if (S.alarm.all) return (settings.count === 2 ? 'Both' : 'All ' + settings.count) + ' batteries reached ' + T;
+    const ks = [...S.alarm.zones].sort((a, b) => a - b).map(k => k + 1);
+    if (settings.count === 1) return 'The battery reached ' + T;
+    if (ks.length === 1) return 'Battery ' + ks[0] + ' reached ' + T;
+    return 'Batteries ' + ks.slice(0, -1).join(', ') + ' and ' + ks[ks.length - 1] + ' reached ' + T;
+  }
+
+  function ring(ks, all) {
+    ks.forEach(k => S.alarm.zones.add(k));
+    if (all) S.alarm.all = true;
+    els.alarmTitle.textContent = alarmText();
+    els.alarmPips.innerHTML = [1, 2, 3, 4].map(i => '<i class="pip' + (i <= settings.level ? ' on' : '') + '"></i>').join('');
+    if (S.alarm.on) return;
+    S.alarm.on = true;
+    els.alarm.hidden = false;
+    Sound.play(settings.sound, true);
+    const buzz = () => { if (navigator.vibrate) navigator.vibrate([500, 250, 500]); };
+    buzz();
+    S.alarm.vib = setInterval(buzz, 2000);
+    S.alarm.title = setInterval(() => { document.title = document.title === TITLE ? 'Battery ready' : TITLE; }, 1000);
+    els.silenceBtn.focus();
+  }
+
+  function stopAlarm() {
+    Sound.stop();
+    clearInterval(S.alarm.vib);
+    clearInterval(S.alarm.title);
+    if (navigator.vibrate) navigator.vibrate(0);
+    document.title = TITLE;
+    S.alarm.on = false; S.alarm.all = false; S.alarm.zones.clear();
+    els.alarm.hidden = true;
+    for (const r of S.rows) r.key = '';
+  }
+  els.silenceBtn.addEventListener('click', stopAlarm);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.alarm.on) stopAlarm(); });
+
+  /* ---------- Drawing a box by hand ---------- */
+  function setDrawing(on) {
+    els.overlay.classList.toggle('drawing', on);
+    els.camHint.hidden = !on;
+    els.drawBtn.textContent = on ? 'Cancel' : 'Draw box';
+  }
+
+  els.drawBtn.addEventListener('click', () => {
+    if (!S.running) return;
+    if (S.phase === 'drawing') {
+      S.drag = null;
+      setDrawing(false);
+      if (S.strip) S.phase = 'watching'; else beginFind();
+      return;
+    }
+    S.find = null;
+    S.phase = 'drawing';
+    setDrawing(true);
+  });
+
+  function toNorm(e) {
+    const r = els.overlay.getBoundingClientRect();
+    return {
+      x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)),
+      y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
+    };
+  }
+  els.overlay.addEventListener('pointerdown', e => {
+    if (S.phase !== 'drawing') return;
+    e.preventDefault();
+    try { els.overlay.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    const p = toNorm(e);
+    S.drag = { a: p, b: p };
+  });
+  els.overlay.addEventListener('pointermove', e => { if (S.drag) S.drag.b = toNorm(e); });
+  els.overlay.addEventListener('pointercancel', () => { S.drag = null; });
+  els.overlay.addEventListener('pointerup', e => {
+    if (!S.drag) return;
+    S.drag.b = toNorm(e);
+    const d = S.drag;
+    S.drag = null;
+    const vw = els.video.videoWidth, vh = els.video.videoHeight;
+    let x0 = Math.min(d.a.x, d.b.x), x1 = Math.max(d.a.x, d.b.x), y0 = Math.min(d.a.y, d.b.y), y1 = Math.max(d.a.y, d.b.y);
+    const wpx = (x1 - x0) * vw, hpx = (y1 - y0) * vh;
+    if (Math.max(wpx, hpx) < 0.04 * Math.max(vw, vh)) { els.camHint.textContent = 'Drag further, across all the battery lights'; return; }
+    els.camHint.textContent = 'Drag across all the battery lights';
+    const horiz = wpx >= hpx;
+    // A thin drag still needs some height to catch the lights.
+    const minAcross = 0.04 * Math.min(vw, vh);
+    if (horiz && hpx < minAcross) { const c = (y0 + y1) / 2, half = minAcross / vh / 2; y0 = Math.max(0, c - half); y1 = Math.min(1, c + half); }
+    if (!horiz && wpx < minAcross) { const c = (x0 + x1) / 2, half = minAcross / vw / 2; x0 = Math.max(0, c - half); x1 = Math.min(1, c + half); }
+    setStrip({ x0, y0, x1, y1 }, Core.equalZones(settings.count), horiz, 'manual');
+  });
+
+  /* ---------- Overlay ---------- */
+  function rrect(g, x, y, w, h, r) {
+    g.beginPath();
+    if (g.roundRect) { g.roundRect(x, y, w, h, r); return; }
+    g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+
+  function tag(g, cx, cy, text, d) {
+    g.font = '600 ' + Math.round(13 * d) + 'px Barlow, system-ui, sans-serif';
+    const w = Math.max(20 * d, g.measureText(text).width + 12 * d), h = 20 * d;
+    rrect(g, cx - w / 2, cy - h / 2, w, h, 6 * d);
+    g.fillStyle = 'rgba(12,16,18,.78)'; g.fill();
+    g.fillStyle = '#fff'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(text, cx, cy + 0.5 * d);
+  }
+
+  const reduceMotion = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
+
+  function drawOverlay(now) {
+    const c = els.overlay, g = octx, W = c.width, H = c.height, d = S.dpr;
+    g.clearRect(0, 0, W, H);
+    if (S.find && !reduceMotion.matches) {
+      const t = (now % 1600) / 1600;
+      g.fillStyle = 'rgba(255,255,255,.10)';
+      g.fillRect(0, t * H - 18 * d, W, 36 * d);
+    }
+    if (S.strip && !S.drag && S.phase !== 'finding' && S.phase !== 'searching') {
+      const st = S.strip, x = st.x0 * W, y = st.y0 * H, w = (st.x1 - st.x0) * W, h = (st.y1 - st.y0) * H;
+      rrect(g, x, y, w, h, 6 * d);
+      g.lineWidth = 4 * d; g.strokeStyle = 'rgba(0,0,0,.5)'; g.stroke();
+      g.lineWidth = 2 * d; g.strokeStyle = '#fff'; g.stroke();
+      const zs = S.zones;
+      g.setLineDash([5 * d, 4 * d]);
+      g.lineWidth = 1.5 * d;
+      g.strokeStyle = 'rgba(255,255,255,.9)';
+      for (let i = 1; i < zs.length - 1; i++) {
+        g.beginPath();
+        if (S.horiz) { const xx = x + zs[i] * w; g.moveTo(xx, y); g.lineTo(xx, y + h); }
+        else { const yy = y + zs[i] * h; g.moveTo(x, yy); g.lineTo(x + w, yy); }
+        g.stroke();
+      }
+      g.setLineDash([]);
+      if (zs.length > 2) {
+        for (let i = 0; i < zs.length - 1; i++) {
+          const m = (zs[i] + zs[i + 1]) / 2;
+          if (S.horiz) { const ty = y - 16 * d > 12 * d ? y - 16 * d : y + h + 16 * d; tag(g, x + m * w, ty, String(i + 1), d); }
+          else { const tx = x - 18 * d > 12 * d ? x - 18 * d : x + w + 18 * d; tag(g, tx, y + m * h, String(i + 1), d); }
+        }
+      }
+      const a = S.analysis;
+      if (a) {
+        const lit = a.peaks.filter(pk => pk.state !== 'none');
+        const len = S.horiz ? w : h;
+        let gap = Infinity;
+        for (let i = 1; i < lit.length; i++) gap = Math.min(gap, (lit[i].u - lit[i - 1].u) * len);
+        const rad = Math.max(2 * d, Math.min(4.5 * d, gap * 0.36));
+        for (const pk of lit) {
+          // A dot just outside the box for each light found: filled = steady, ring = blinking.
+          const px = S.horiz ? x + pk.u * w : x + w + rad + 5 * d;
+          const py = S.horiz ? y + h + rad + 5 * d : y + pk.u * h;
+          g.beginPath();
+          g.arc(px, py, rad, 0, Math.PI * 2);
+          if (pk.state === 'solid') {
+            g.fillStyle = '#3BD764'; g.fill();
+            g.lineWidth = Math.min(1.5 * d, rad * 0.4); g.strokeStyle = '#fff'; g.stroke();
+          } else {
+            g.lineWidth = Math.min(2.5 * d, rad * 0.6);
+            g.strokeStyle = reduceMotion.matches ? '#3BD764' : 'rgba(59,215,100,' + (0.55 + 0.45 * Math.sin(now / 160)).toFixed(2) + ')';
+            g.stroke();
+          }
+        }
+      }
+    }
+    if (S.drag) {
+      const a = S.drag.a, b = S.drag.b;
+      g.setLineDash([6 * d, 4 * d]);
+      g.lineWidth = 2 * d;
+      g.strokeStyle = '#3BD764';
+      g.strokeRect(Math.min(a.x, b.x) * W, Math.min(a.y, b.y) * H, Math.abs(b.x - a.x) * W, Math.abs(b.y - a.y) * H);
+      g.setLineDash([]);
+    }
+  }
+
+  /* ---------- Main loop ---------- */
+  function tick() {
+    if (!S.running) return;
+    const now = performance.now(), v = els.video;
+    if (v.videoWidth && v.readyState >= 2) {
+      if (v.currentTime !== S.lastVideoTime) { S.lastVideoTime = v.currentTime; S.frozenSince = 0; }
+      else if (!S.frozenSince) S.frozenSince = now;
+      if (S.find) stepFind(now);
+      else if (S.phase === 'searching' && now >= S.retryAt) S.find = { img: null, w: 0, h: 0, start: 0 };
+      if (S.strip && (S.phase === 'watching' || S.phase === 'drawing')) stepWatch(now);
+    }
+    renderStatus(now);
+    renderReadings(now);
+  }
+  setInterval(tick, TICK_MS);
+  (function frame(now) {
+    requestAnimationFrame(frame);
+    if (S.running) drawOverlay(now);
+  })(performance.now());
+
+  /* ---------- Start and stop ---------- */
+  els.startBtn.addEventListener('click', async () => {
+    // Both must happen right in the tap, before waiting on the camera.
+    Sound.unlock();
+    Sound.chirp();
+    keepAwake(true);
+    els.introErr.hidden = true;
+    S.phase = 'starting';
+    renderStatus(performance.now());
+    els.startBtn.disabled = true;
+    try {
+      els.intro.hidden = true;
+      els.cam.hidden = false;
+      els.view.classList.add('live');
+      await openCamera(null);
+    } catch (e) {
+      closeCamera();
+      els.intro.hidden = false; els.cam.hidden = true; els.view.classList.remove('live');
+      els.introErr.textContent = cameraError(e);
+      els.introErr.hidden = false;
+      els.startBtn.disabled = false;
+      S.phase = 'idle';
+      renderStatus(performance.now());
+      return;
+    }
+    els.startBtn.disabled = false;
+    S.running = true;
+    S.triedSaved = false;
+    els.tools.hidden = false;
+    els.readings.hidden = false;
+    showNote('');
+    keepAwake();
+    layout();
+    beginFind();
+  });
+
+  els.findBtn.addEventListener('click', () => { S.triedSaved = true; showNote(''); beginFind(); });
+
+  els.stopBtn.addEventListener('click', () => {
+    stopAlarm();
+    S.running = false; S.find = null; S.strip = null; S.analysis = null; S.phase = 'idle'; S.drag = null;
+    closeCamera();
+    if (S.wake) { S.wake.release().catch(() => {}); S.wake = null; }
+    setDrawing(false);
+    els.cam.hidden = true; els.intro.hidden = false; els.view.classList.remove('live');
+    els.tools.hidden = true; els.readings.hidden = true;
+    showNote('');
+    resetZones();
+    renderStatus(performance.now());
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { S.hiddenAt = Date.now(); return; }
+    if (!S.running) return;
+    keepAwake();
+    Sound.resume();
+    els.video.play().catch(() => {});
+    if (S.track && S.track.readyState === 'ended') onTrackEnded();
+    if (S.hiddenAt && Date.now() - S.hiddenAt > 3000) showNote("This page was in the background, so it couldn't watch the lights. Keep it open on screen.");
+    S.hiddenAt = 0;
+  });
+
+  syncControls();
+  buildRows();
+  resetZones();
+
+  // Handle for automated tests.
+  window.__chargeAlarm = { S, settings, Core, Sound, setStrip, beginFind, ring, stopAlarm, setLevel };
+})();
+</script>
+</body>
+</html>

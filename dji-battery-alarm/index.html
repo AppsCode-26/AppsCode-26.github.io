@@ -64,6 +64,11 @@
   .view.live { background: #000; border-color: transparent; }
   .intro { padding: 22px 18px 18px; }
   .intro-err { margin: 12px 0 0; color: var(--warn); font-weight: 500; }
+  .intro-ok { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: var(--cap); font-weight: 600; }
+  .intro-ok.warn { color: var(--warn); }
+  .text { width: 100%; min-height: 44px; padding: 9px 12px; border: 1px solid var(--seam); border-radius: 11px; background: var(--panel); }
+  .setup { margin: 4px 0 0; padding-left: 1.3em; color: var(--ink-2); font-size: .93rem; display: grid; gap: 4px; }
+  .setup b { color: var(--ink); font-weight: 600; }
   .cam { position: relative; margin: 0 auto; background: #000; }
   .cam video, .cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .cam video { object-fit: fill; }
@@ -158,6 +163,8 @@
   .alarm .pip { width: 28px; height: 28px; border-radius: 5px; background: rgba(0, 0, 0, .22); box-shadow: none; }
   .alarm .pip.on { background: #fff; box-shadow: 0 0 16px rgba(255, 255, 255, .8); }
   .alarm .btn { width: 100%; min-height: 62px; background: #fff; border-color: #fff; color: #0C1A11; font-size: 1.25rem; }
+  .alarm .btn.plug { min-height: 52px; background: transparent; border: 2px solid currentColor; color: inherit; font-size: 1.1rem; }
+  .alarm-sub { margin: -10px 0 0; font-weight: 600; }
 
   @media (prefers-reduced-motion: reduce) {
     .pip.blink { animation: none; opacity: .55; }
@@ -174,6 +181,7 @@
 
   <section class="view" id="view" aria-label="Camera">
     <div class="intro" id="intro">
+      <p class="intro-ok" id="plugMsg" role="status" hidden></p>
       <div class="hub" aria-hidden="true">
         <div class="hub-tops"><span></span><span></span><span></span></div>
         <div class="hub-face">
@@ -185,7 +193,7 @@
       <ol class="steps">
         <li>Prop your phone so the camera looks straight at the hub's lights, close up.</li>
         <li>Tap Start and allow the camera.</li>
-        <li>Leave this page open. It rings when a battery gets to your level.</li>
+        <li id="stepOpen">Leave this page open. It rings when a battery gets to your level.</li>
       </ol>
       <button class="btn primary big" id="startBtn" type="button">Start</button>
       <p class="intro-err" id="introErr" role="alert" hidden></p>
@@ -256,7 +264,30 @@
         </div>
         <button class="btn" id="testBtn" type="button">Test sound</button>
       </div>
-      <p class="help">Plays at your phone's media volume, even on silent. Turn it up and tap Test sound to check.</p>
+      <p class="help" id="soundHelp">Plays at your phone's media volume, even on silent. Turn it up and tap Test sound to check.</p>
+    </div>
+
+    <div class="field" id="plugField">
+      <div class="field-row">
+        <label class="label" for="plugToggle">Turn off a smart plug</label>
+        <span class="switch"><input type="checkbox" id="plugToggle"><span></span></span>
+      </div>
+      <p class="help">When it rings, it runs a shortcut that turns off the Apple Home plug your charger is on. Works on iPad, iPhone and Mac.</p>
+      <div id="plugSetup" hidden>
+        <ol class="setup">
+          <li>Open the <b>Shortcuts</b> app and tap <b>+</b>.</li>
+          <li>Add the <b>Control Home</b> action, pick your plug and set it to <b>Turn Off</b>.</li>
+          <li>Name the shortcut <b id="plugNameEcho">Charge Alarm Off</b>.</li>
+          <li>Tap <b>Test plug</b> below, then tap <b>Open</b> if Safari asks.</li>
+        </ol>
+        <div class="field-row" style="margin-top: 10px">
+          <label class="label" for="plugName">Shortcut name</label>
+        </div>
+        <input class="text" id="plugName" type="text" autocomplete="off" autocapitalize="words" spellcheck="false">
+        <div class="field-row" style="margin-top: 10px">
+          <button class="btn" id="plugTest" type="button">Test plug</button>
+        </div>
+      </div>
     </div>
 
     <details class="more">
@@ -284,14 +315,16 @@
     </details>
   </section>
 
-  <p class="foot">Works best 15 to 30 cm from the hub, facing the lights. Keep the screen on and this page open. The camera picture stays on your phone.</p>
+  <p class="foot" id="foot">Works best 15 to 30 cm from the hub, facing the lights. Keep the screen on and this page open. The camera picture stays on your phone.</p>
 </main>
 
 <div class="alarm" id="alarm" role="alertdialog" aria-modal="true" aria-labelledby="alarmTitle" hidden>
   <div class="alarm-inner">
     <div class="pips" id="alarmPips" aria-hidden="true"></div>
     <h2 id="alarmTitle"></h2>
+    <p class="alarm-sub" id="alarmPlugMsg" hidden>Turning off the plug…</p>
     <button class="btn" id="silenceBtn" type="button">Stop alarm</button>
+    <button class="btn plug" id="alarmPlugBtn" type="button" hidden>Turn off plug</button>
   </div>
 </div>
 
@@ -748,7 +781,24 @@ const Core = (() => {
     levelPicker: $('levelPicker'), levelValue: $('levelValue'), countSeg: $('countSeg'),
     modeSeg: $('modeSeg'), modeHelp: $('modeHelp'), soundSeg: $('soundSeg'), testBtn: $('testBtn'),
     blinkToggle: $('blinkToggle'), sensSeg: $('sensSeg'), volume: $('volume'),
-    alarm: $('alarm'), alarmTitle: $('alarmTitle'), alarmPips: $('alarmPips'), silenceBtn: $('silenceBtn')
+    alarm: $('alarm'), alarmTitle: $('alarmTitle'), alarmPips: $('alarmPips'), silenceBtn: $('silenceBtn'),
+    plugField: $('plugField'), plugToggle: $('plugToggle'), plugSetup: $('plugSetup'), plugName: $('plugName'),
+    plugNameEcho: $('plugNameEcho'), plugTest: $('plugTest'), plugMsg: $('plugMsg'),
+    alarmPlugMsg: $('alarmPlugMsg'), alarmPlugBtn: $('alarmPlugBtn')
+  };
+
+  // Inside the Android app, a small bridge keeps the screen on, vibrates and handles volume.
+  const APP = window.ChargeAlarmApp || null;
+  const callApp = (fn, ...args) => { try { if (APP && APP[fn]) return APP[fn](...args); } catch (e) { /* bridge gone */ } };
+  if (APP) {
+    document.documentElement.classList.add('in-app');
+    $('stepOpen').textContent = 'Leave the app open. It rings when a battery gets to your level.';
+    $('soundHelp').textContent = 'When it rings, the app turns your media volume up if it is low, then puts it back. Tap Test sound to check.';
+    $('foot').textContent = 'Works best 15 to 30 cm from the hub, facing the lights. The app keeps the screen on while it is open. The camera picture stays on your phone.';
+  }
+  const vibrate = pattern => {
+    if (APP) callApp('vibrate', JSON.stringify(pattern));
+    else if (navigator.vibrate) navigator.vibrate(pattern);
   };
 
   const WINDOW_MS = 6000;   // how far back blinking is judged
@@ -764,7 +814,7 @@ const Core = (() => {
     get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage off */ } }
   };
-  const DEFAULTS = { level: 2, count: 3, mode: 'each', sound: 'beep', volume: 0.9, countBlink: false, sens: 'normal' };
+  const DEFAULTS = { level: 2, count: 3, mode: 'each', sound: 'beep', volume: 0.9, countBlink: false, sens: 'normal', plug: false, plugName: 'Charge Alarm Off' };
   const settings = Object.assign({}, DEFAULTS, store.get('chargeAlarm.settings', {}));
   {
     const ok = (k, list) => { if (!list.includes(settings[k])) settings[k] = DEFAULTS[k]; };
@@ -772,6 +822,8 @@ const Core = (() => {
     ok('sound', ['beep', 'siren', 'chime']); ok('sens', ['low', 'normal', 'high']);
     if (!(settings.volume >= 0.1 && settings.volume <= 1)) settings.volume = DEFAULTS.volume;
     settings.countBlink = settings.countBlink === true;
+    settings.plug = settings.plug === true;
+    if (typeof settings.plugName !== 'string' || !settings.plugName.trim()) settings.plugName = DEFAULTS.plugName;
   }
   const save = () => store.set('chargeAlarm.settings', settings);
 
@@ -942,6 +994,10 @@ const Core = (() => {
       ? 'Rings once, when the last battery gets to ' + lightsWord(T) + '.'
       : 'Rings each time a battery gets to ' + lightsWord(T) + '.';
     els.blinkToggle.checked = !!settings.countBlink;
+    els.plugToggle.checked = settings.plug;
+    els.plugSetup.hidden = !settings.plug;
+    if (document.activeElement !== els.plugName) els.plugName.value = settings.plugName;
+    els.plugNameEcho.textContent = settings.plugName;
     els.volume.value = settings.volume;
   }
 
@@ -990,6 +1046,50 @@ const Core = (() => {
   bindSeg(els.soundSeg, 'sound', () => { if (!S.alarm.on) { Sound.unlock(); Sound.test(settings.sound); } });
   bindSeg(els.sensSeg, 'sens', resetZones);
   els.blinkToggle.addEventListener('change', () => { settings.countBlink = els.blinkToggle.checked; save(); resetZones(); });
+
+  /* ---------- Smart plug (Apple Home, through a shortcut) ----------
+     A web page can't reach Apple Home, but it can run a shortcut. The shortcut turns the
+     plug off, then Shortcuts sends Safari back here with ?plug=off (or failed). */
+  function plugUrl() {
+    const back = location.origin + location.pathname;
+    const q = k => encodeURIComponent(back + '?plug=' + k);
+    return 'shortcuts://x-callback-url/run-shortcut?name=' + encodeURIComponent(settings.plugName.trim()) +
+      '&x-success=' + q('off') + '&x-cancel=' + q('cancel') + '&x-error=' + q('failed');
+  }
+  function runPlug() {
+    store.set('chargeAlarm.plugAsked', Date.now());
+    location.href = plugUrl();
+  }
+  els.plugToggle.addEventListener('change', () => { settings.plug = els.plugToggle.checked; save(); syncControls(); });
+  els.plugName.addEventListener('input', () => {
+    settings.plugName = els.plugName.value.trim() || DEFAULTS.plugName;
+    els.plugNameEcho.textContent = settings.plugName;
+    save();
+  });
+  els.plugName.addEventListener('blur', syncControls);
+  els.plugTest.addEventListener('click', runPlug);
+  els.alarmPlugBtn.addEventListener('click', runPlug);
+  if (APP) els.plugField.hidden = true;
+
+  // Back from Shortcuts: say what happened, then tidy the address.
+  {
+    const res = new URLSearchParams(location.search).get('plug');
+    if (res) {
+      const asked = store.get('chargeAlarm.plugAsked', 0);
+      const t = asked ? clock(asked) : clock(Date.now());
+      const text = {
+        off: 'Turned off the plug at ' + t + '.',
+        failed: "The plug shortcut didn't run. Check that it's named " + settings.plugName + ', in Settings under Turn off a smart plug.',
+        cancel: 'The plug shortcut was stopped before it finished.'
+      }[res];
+      if (text) {
+        els.plugMsg.textContent = text;
+        els.plugMsg.classList.toggle('warn', res !== 'off');
+        els.plugMsg.hidden = false;
+      }
+      try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
+    }
+  }
   els.volume.addEventListener('input', () => { settings.volume = Number(els.volume.value); save(); });
   els.volume.addEventListener('change', () => { if (!S.alarm.on) { Sound.unlock(); Sound.test(settings.sound); } });
   els.testBtn.addEventListener('click', () => { Sound.unlock(); Sound.test(settings.sound); });
@@ -1078,7 +1178,7 @@ const Core = (() => {
   /* ---------- Camera ---------- */
   function cameraError(e) {
     const n = e && e.name;
-    if (n === 'NotAllowedError' || n === 'SecurityError') return 'Camera access is blocked. Allow the camera for this site in your browser settings, then tap Start.';
+    if (n === 'NotAllowedError' || n === 'SecurityError') return APP ? 'Camera access is off. Allow the camera for Charge Alarm in Settings, then tap Start.' : 'Camera access is blocked. Allow the camera for this site in your browser settings, then tap Start.';
     if (n === 'NotFoundError' || n === 'OverconstrainedError') return 'No camera found on this device.';
     if (n === 'NotReadableError') return 'Another app is using the camera. Close it, then tap Start.';
     if (n === 'NoMediaDevices') return window.isSecureContext ? "This browser can't use the camera. Try Safari or Chrome." : 'Open this page with https:// so it can use the camera.';
@@ -1184,6 +1284,7 @@ const Core = (() => {
 
   // Keeps the screen from sleeping (sleeping stops the camera). quiet: don't complain yet.
   async function keepAwake(quiet) {
+    if (APP) return; // the app keeps the screen on by itself
     if (!('wakeLock' in navigator)) { if (!quiet) showNote("This browser can't keep the screen on by itself. Turn off auto-lock while it runs."); return; }
     try {
       if (S.wake && !S.wake.released) return;
@@ -1346,10 +1447,16 @@ const Core = (() => {
     S.alarm.on = true;
     els.alarm.hidden = false;
     Sound.play(settings.sound, true);
-    const buzz = () => { if (navigator.vibrate) navigator.vibrate([500, 250, 500]); };
+    callApp('alarmStarted');
+    const buzz = () => vibrate([500, 250, 500]);
     buzz();
     S.alarm.vib = setInterval(buzz, 2000);
     S.alarm.title = setInterval(() => { document.title = document.title === TITLE ? 'Battery ready' : TITLE; }, 1000);
+    const plug = settings.plug && !APP;
+    els.alarmPlugBtn.hidden = !plug;
+    els.alarmPlugMsg.hidden = !plug;
+    // Give the alarm a moment to sound, then run the shortcut.
+    if (plug) S.alarm.plugTimer = setTimeout(runPlug, 2500);
     els.silenceBtn.focus();
   }
 
@@ -1357,7 +1464,8 @@ const Core = (() => {
     Sound.stop();
     clearInterval(S.alarm.vib);
     clearInterval(S.alarm.title);
-    if (navigator.vibrate) navigator.vibrate(0);
+    vibrate(0);
+    if (S.alarm.on) callApp('alarmStopped');
     document.title = TITLE;
     S.alarm.on = false; S.alarm.all = false; S.alarm.zones.clear();
     els.alarm.hidden = true;
@@ -1563,6 +1671,7 @@ const Core = (() => {
   els.findBtn.addEventListener('click', () => { S.triedSaved = true; showNote(''); beginFind(); });
 
   els.stopBtn.addEventListener('click', () => {
+    clearTimeout(S.alarm.plugTimer);
     stopAlarm();
     S.running = false; S.find = null; S.strip = null; S.analysis = null; S.phase = 'idle'; S.drag = null;
     closeCamera();
@@ -1582,7 +1691,7 @@ const Core = (() => {
     Sound.resume();
     els.video.play().catch(() => {});
     if (S.track && S.track.readyState === 'ended') onTrackEnded();
-    if (S.hiddenAt && Date.now() - S.hiddenAt > 3000) showNote("This page was in the background, so it couldn't watch the lights. Keep it open on screen.");
+    if (S.hiddenAt && Date.now() - S.hiddenAt > 3000) showNote(APP ? "The app was in the background, so it couldn't watch the lights. Keep it open on screen." : "This page was in the background, so it couldn't watch the lights. Keep it open on screen.");
     S.hiddenAt = 0;
   });
 
